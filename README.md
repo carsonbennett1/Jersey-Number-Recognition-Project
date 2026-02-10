@@ -1,1 +1,2 @@
-# 419-Jersey-Number-Recognition
+## COSC 419 Jersey Number Recognition Project
+#### Group Number: 14
