@@ -1,0 +1,5 @@
+# Dependencies for running setup.py (install before: pip install -r requirements-setup.txt)
+gdown>=4.0.0
+
+# For data.py - SoccerNet dataset downloader
+SoccerNet>=0.1.0

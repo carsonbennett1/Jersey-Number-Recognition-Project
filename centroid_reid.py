@@ -2,15 +2,29 @@ from pathlib import Path
 import sys
 import os
 import argparse
+import configuration as _cfg
 
-ROOT = './reid/centroids-reid/'
-sys.path.append(str(ROOT))  # add ROOT to PATH
+ROOT = os.path.join(_cfg._main_repo, 'reid/centroids-reid/')
+sys.path.append(str(ROOT))
 
 import numpy as np
 import torch
 from tqdm import tqdm
 import cv2
 from PIL import Image
+
+_orig_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
+import pytorch_lightning as pl
+_hp = pl.LightningModule.hparams
+if isinstance(_hp, property):
+    def _hp_setter(self, value):
+        self._hparams = value
+    pl.LightningModule.hparams = property(_hp.fget, _hp_setter)
 
 from config import cfg
 from train_ctl_model import CTLModel
@@ -45,33 +59,43 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
     use_cuda = True if torch.cuda.is_available() and cfg.GPU_IDS else False
     model = CTLModel.load_from_checkpoint(cfg.MODEL.PRETRAIN_PATH, cfg=cfg)
 
-    # print("Loading from " + MODEL_FILE)
     if use_cuda:
         model.to('cuda')
+        torch.backends.cudnn.benchmark = True
         print("using GPU")
     model.eval()
 
-    tracks = os.listdir(input_folder)
+    tracks = [t for t in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, t))]
     transforms_base = ReidTransforms(cfg)
     val_transforms = transforms_base.build_transforms(is_train=False)
 
+    skipped = 0
     for track in tqdm(tracks):
         features = []
         track_path = os.path.join(input_folder, track)
-        images = os.listdir(track_path)
+        images = [f for f in os.listdir(track_path) if not f.startswith('.') and os.path.isfile(os.path.join(track_path, f))]
+        if not images:
+            continue
         output_file = os.path.join(output_folder, f"{track}_features.npy")
-        for img_path in images:
-            img = cv2.imread(os.path.join(track_path, img_path))
-            input_img = Image.fromarray(img)
-            input_img = torch.stack([val_transforms(input_img)])
-            with torch.no_grad():
+        if os.path.exists(output_file):
+            skipped += 1
+            continue
+
+        with torch.inference_mode(), torch.amp.autocast('cuda', enabled=use_cuda):
+            for img_path in images:
+                img = cv2.imread(os.path.join(track_path, img_path))
+                input_img = Image.fromarray(img)
+                input_img = torch.stack([val_transforms(input_img)])
                 _, global_feat = model.backbone(input_img.cuda() if use_cuda else input_img)
                 global_feat = model.bn(global_feat)
-            features.append(global_feat.cpu().numpy().reshape(-1,))
+                features.append(global_feat.cpu().float().numpy().reshape(-1,))
 
         np_feat = np.array(features)
         with open(output_file, 'wb') as f:
             np.save(f, np_feat)
+
+    if skipped > 0:
+        print(f"Resumed: skipped {skipped} tracks with existing features, processed {len(tracks) - skipped}")
 
 
 if __name__ == "__main__":

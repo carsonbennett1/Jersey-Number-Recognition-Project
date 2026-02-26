@@ -4,7 +4,10 @@ import warnings
 import json
 import sys
 
-ROOT = './pose/ViTPose/'
+import torch
+
+import configuration as _cfg
+ROOT = os.path.join(_cfg._main_repo, 'pose/ViTPose/')
 sys.path.append(str(ROOT))  # add ROOT to PATH
 
 from argparse import ArgumentParser
@@ -47,7 +50,7 @@ def main():
         help='Root of the output img file. '
              'Default not saving the visualization images.')
     parser.add_argument(
-        '--device', default='cuda:0', help='Device used for inference')
+        '--device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='Device used for inference')
     parser.add_argument(
         '--kpt-thr', type=float, default=0.3, help='Keypoint score threshold')
     parser.add_argument(
@@ -63,11 +66,11 @@ def main():
 
     args = parser.parse_args()
 
-    print(args.show, args.out_img_root)
-    # assert args.show or (args.out_img_root != '')
+    print(f"Pose device: {args.device}")
+
+    torch.backends.cudnn.benchmark = True
 
     coco = COCO(args.json_file)
-    # build the pose model from a config file and a checkpoint file
     pose_model = init_pose_model(
         args.pose_config, args.pose_checkpoint, device=args.device.lower())
 
@@ -83,64 +86,55 @@ def main():
 
     img_keys = list(coco.imgs.keys())
 
-    # optional
     return_heatmap = False
-
-    # e.g. use ('backbone', ) to return backbone feature
     output_layer_names = None
 
     results = []
+    save_vis = args.out_img_root != ''
 
-    # process each image
-    for i in range(len(img_keys)):
-        # get bounding box annotations
-        image_id = img_keys[i]
-        image = coco.loadImgs(image_id)[0]
-        image_name = os.path.join(args.img_root, image['file_name'])
-        ann_ids = coco.getAnnIds(image_id)
+    from tqdm import tqdm
+    with torch.inference_mode():
+        for i in tqdm(range(len(img_keys)), desc="Pose estimation"):
+            image_id = img_keys[i]
+            image = coco.loadImgs(image_id)[0]
+            image_name = os.path.join(args.img_root, image['file_name'])
+            ann_ids = coco.getAnnIds(image_id)
 
-        # make person bounding boxes
-        person_results = []
-        for ann_id in ann_ids:
-            person = {}
-            ann = coco.anns[ann_id]
-            # bbox format is 'xywh'
-            person['bbox'] = ann['bbox']
-            person_results.append(person)
+            person_results = []
+            for ann_id in ann_ids:
+                person = {}
+                ann = coco.anns[ann_id]
+                person['bbox'] = ann['bbox']
+                person_results.append(person)
 
-        # test a single image, with a list of bboxes
-        pose_results, returned_outputs = inference_top_down_pose_model(
-            pose_model,
-            image_name,
-            person_results,
-            bbox_thr=None,
-            format='xywh',
-            dataset=dataset,
-            dataset_info=dataset_info,
-            return_heatmap=return_heatmap,
-            outputs=output_layer_names)
+            pose_results, returned_outputs = inference_top_down_pose_model(
+                pose_model,
+                image_name,
+                person_results,
+                bbox_thr=None,
+                format='xywh',
+                dataset=dataset,
+                dataset_info=dataset_info,
+                return_heatmap=return_heatmap,
+                outputs=output_layer_names)
 
-        # print(pose_results)
-        results.append(
-            {"img_name": image['file_name'], "id": image_id, "keypoints": pose_results[0]['keypoints'].tolist()})
+            results.append(
+                {"img_name": image['file_name'], "id": image_id, "keypoints": pose_results[0]['keypoints'].tolist()})
 
-        if args.out_img_root == '':
-            out_file = None
-        else:
-            os.makedirs(args.out_img_root, exist_ok=True)
-            out_file = os.path.join(args.out_img_root, f'vis_{i}.jpg')
-
-        vis_pose_result(
-            pose_model,
-            image_name,
-            pose_results,
-            dataset=dataset,
-            dataset_info=dataset_info,
-            kpt_score_thr=args.kpt_thr,
-            radius=args.radius,
-            thickness=args.thickness,
-            show=args.show,
-            out_file=out_file)
+            if save_vis:
+                os.makedirs(args.out_img_root, exist_ok=True)
+                out_file = os.path.join(args.out_img_root, f'vis_{i}.jpg')
+                vis_pose_result(
+                    pose_model,
+                    image_name,
+                    pose_results,
+                    dataset=dataset,
+                    dataset_info=dataset_info,
+                    kpt_score_thr=args.kpt_thr,
+                    radius=args.radius,
+                    thickness=args.thickness,
+                    show=args.show,
+                    out_file=out_file)
 
     if args.out_json != '':
         with open(args.out_json, 'w') as fp:

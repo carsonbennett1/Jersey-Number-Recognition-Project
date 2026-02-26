@@ -8,11 +8,14 @@ from tqdm import tqdm
 import configuration as config
 from pathlib import Path
 
+def list_dirs(path):
+    return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+
 def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'gauss', exclude_balls=True):
     root_dir = config.dataset['SoccerNet']['root_dir']
     image_dir = config.dataset['SoccerNet'][args.part]['images']
     path_to_images = os.path.join(root_dir, image_dir)
-    tracklets = os.listdir(path_to_images)
+    tracklets = list_dirs(path_to_images)
     results_dict = {x:[] for x in tracklets}
 
     if use_filtered:
@@ -60,7 +63,7 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
     root_dir = config.dataset['SoccerNet']['root_dir']
     image_dir = config.dataset['SoccerNet'][args.part]['images']
     path_to_images = os.path.join(root_dir, image_dir)
-    tracklets = os.listdir(path_to_images)
+    tracklets = list_dirs(path_to_images)
 
     if use_filtered:
         if filter == 'sim':
@@ -88,6 +91,10 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
         tracklets = updated_tracklets
 
 
+    model_path = config.dataset['SoccerNet']['legibility_model']
+    model_arch = config.dataset['SoccerNet']['legibility_model_arch']
+    leg_model, leg_device = lc.load_legibility_model(model_path, arch=model_arch)
+
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
         if use_filtered:
@@ -95,7 +102,7 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
         else:
             images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
-        track_results = lc.run(images_full_path, config.dataset['SoccerNet']['legibility_model'], arch=config.dataset['SoccerNet']['legibility_model_arch'], threshold=0.5)
+        track_results = lc.run(images_full_path, model_path, arch=model_arch, threshold=0.5, model=leg_model, device=leg_device)
         legible = list(np.nonzero(track_results))[0]
         if len(legible) == 0:
             illegible_tracklets.append(directory)
@@ -127,10 +134,10 @@ def generate_json_for_pose_estimator(args, legible = None):
         root_dir = os.path.join(os.getcwd(), config.dataset['SoccerNet']['root_dir'])
         image_dir = config.dataset['SoccerNet'][args.part]['images']
         path_to_images = os.path.join(root_dir, image_dir)
-        tracks = os.listdir(path_to_images)
+        tracks = list_dirs(path_to_images)
         for tr in tracks:
             track_dir = os.path.join(path_to_images, tr)
-            imgs = os.listdir(track_dir)
+            imgs = [f for f in os.listdir(track_dir) if not f.startswith('.')]
             for img in imgs:
                 all_files.append(os.path.join(track_dir, img))
 
@@ -153,7 +160,7 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
         if not str(entry) in dict.keys():
             dict[str(entry)] = -1
 
-    all_tracks = os.listdir(image_dir)
+    all_tracks = list_dirs(image_dir)
     for t in all_tracks:
         if not t in dict.keys():
             dict[t] = -1
@@ -168,8 +175,8 @@ def train_parseq(args):
         current_dir = os.getcwd()
         os.chdir(parseq_dir)
         data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
-        command = f"conda run -n {config.str_env} python3 train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 " \
-                  f"pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2"
+        command = f'"{config.str_python}" train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 ' \
+                  f'pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2'
         success = os.system(command) == 0
         os.chdir(current_dir)
         print("Done training")
@@ -179,8 +186,8 @@ def train_parseq(args):
         current_dir = os.getcwd()
         os.chdir(parseq_dir)
         data_root = os.path.join(current_dir, config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet']['numbers_data'])
-        command = f"conda run -n {config.str_env} python3 train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 " \
-                  f"pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2"
+        command = f'"{config.str_python}" train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 ' \
+                  f'pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2'
         success = os.system(command) == 0
         os.chdir(current_dir)
         print("Done training")
@@ -197,7 +204,7 @@ def hockey_pipeline(args):
         root_dir = os.path.join(config.dataset["Hockey"]["root_dir"], config.dataset["Hockey"]["legibility_data"])
 
         print("Test legibility classifier")
-        command = f"python3 legibility_classifier.py --data {root_dir} --arch resnet34 --trained_model {config.dataset['Hockey']['legibility_model']}"
+        command = f"python legibility_classifier.py --data {root_dir} --arch resnet34 --trained_model {config.dataset['Hockey']['legibility_model']}"
         success = os.system(command) == 0
         print("Done legibility classifier")
 
@@ -205,10 +212,13 @@ def hockey_pipeline(args):
         print("Predict numbers")
         current_dir = os.getcwd()
         data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
-        command = f"conda run -n {config.str_env} python3 str.py  {config.dataset['Hockey']['str_model']}\
-            --data_root={data_root}"
+        command = f'"{config.str_python}" str.py  {config.dataset["Hockey"]["str_model"]}\
+            --data_root={data_root}'
         success = os.system(command) == 0
         print("Done predict numbers")
+
+def _output_exists(path):
+    return os.path.isfile(path) and os.path.getsize(path) > 0
 
 def soccer_net_pipeline(args):
     legible_dict = None
@@ -232,45 +242,56 @@ def soccer_net_pipeline(args):
     output_json = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                config.dataset['SoccerNet'][args.part]['pose_output_json'])
 
+    gauss_filtered_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
+                                       config.dataset['SoccerNet'][args.part]['gauss_filtered'])
+
     # 1. Filter out soccer ball based on images size
     if args.pipeline['soccer_ball_filter']:
-        print("Determine soccer ball")
-        success = helpers.identify_soccer_balls(image_dir, soccer_ball_list)
-        print("Done determine soccer ball")
+        if _output_exists(soccer_ball_list):
+            print("Determine soccer ball: SKIPPED (output exists)")
+        else:
+            print("Determine soccer ball")
+            success = helpers.identify_soccer_balls(image_dir, soccer_ball_list)
+            print("Done determine soccer ball")
 
-    # 1. generate and store features for each image in each tracklet
+    # 2. generate and store features for each image in each tracklet
     if args.pipeline['feat']:
         print("Generate features")
-        command = f"conda run -n {config.reid_env} python3 {config.reid_script} --tracklets_folder {image_dir} --output_folder {features_dir}"
+        command = f'"{config.reid_python}" {config.reid_script} --tracklets_folder {image_dir} --output_folder {features_dir}'
         success = os.system(command) == 0
         print("Done generating features")
 
-    #2. identify and remove outliers based on features
+    # 3. identify and remove outliers based on features
     if args.pipeline['filter'] and success:
-        print("Identify and remove outliers")
-        command = f"python3 gaussian_outliers.py --tracklets_folder {image_dir} --output_folder {features_dir}"
-        success = os.system(command) == 0
-        print("Done removing outliers")
+        if _output_exists(gauss_filtered_path):
+            print("Identify and remove outliers: SKIPPED (output exists)")
+        else:
+            print("Identify and remove outliers")
+            command = f"python gaussian_outliers.py --tracklets_folder {image_dir} --output_folder {features_dir}"
+            success = os.system(command) == 0
+            print("Done removing outliers")
 
-    #3. pass all images through legibililty classifier and record results
+    # 4. pass all images through legibility classifier and record results
     if args.pipeline['legible'] and success:
-        print("Classifying Legibility:")
-        try:
-            legible_dict, illegible_tracklets = get_soccer_net_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
-            #get_soccer_net_raw_legibility_results(args)
-            #legible_dict, illegible_tracklets = get_soccer_net_combined_legibility_results(args)
-        except Exception as error:
-            print(f'Failed to run legibility classifier:{error}')
-            success = False
-        print("Done classifying legibility")
+        if _output_exists(full_legibile_path) and _output_exists(illegible_path):
+            print("Classifying Legibility: SKIPPED (output exists)")
+            with open(full_legibile_path, 'r') as f:
+                legible_dict = json.load(f)
+        else:
+            print("Classifying Legibility:")
+            try:
+                legible_dict, illegible_tracklets = get_soccer_net_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
+            except Exception as error:
+                print(f'Failed to run legibility classifier:{error}')
+                success = False
+            print("Done classifying legibility")
 
-    #3.5 evaluate tracklet legibility results
+    # 4.5 evaluate tracklet legibility results
     if args.pipeline['legible_eval'] and success:
         print("Evaluate Legibility results:")
         try:
             if legible_dict is None:
                  with open(full_legibile_path, 'r') as openfile:
-                    # Reading from json file
                     legible_dict = json.load(openfile)
 
             helpers.evaluate_legibility(gt_path, illegible_path, legible_dict, soccer_ball_list=soccer_ball_list)
@@ -280,80 +301,84 @@ def soccer_net_pipeline(args):
         print("Done evaluating legibility")
 
 
-    #4. generate json for pose-estimation
+    # 5. generate json for pose-estimation + run pose
     if args.pipeline['pose'] and success:
-        print("Generating json for pose")
-        try:
-            if legible_dict is None:
-                with open(full_legibile_path, 'r') as openfile:
-                    # Reading from json file
-                    legible_dict = json.load(openfile)
-            generate_json_for_pose_estimator(args, legible = legible_dict)
-        except Exception as e:
-            print(e)
-            success = False
-        print("Done generating json for pose")
+        if _output_exists(output_json):
+            print("Generating json for pose: SKIPPED (output exists)")
+            print("Detecting pose: SKIPPED (output exists)")
+        else:
+            print("Generating json for pose")
+            try:
+                if legible_dict is None:
+                    with open(full_legibile_path, 'r') as openfile:
+                        legible_dict = json.load(openfile)
+                generate_json_for_pose_estimator(args, legible = legible_dict)
+            except Exception as e:
+                print(e)
+                success = False
+            print("Done generating json for pose")
 
-        # 4.5 Alternatively generate json for pose for all images in test/train
-        #generate_json_for_pose_estimator(args)
-
-
-        #5. run pose estimation and store results
-        if success:
-            print("Detecting pose")
-            command = f"conda run -n {config.pose_env} python3 pose.py {config.pose_home}/configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/ViTPose_huge_coco_256x192.py \
-                {config.pose_home}/checkpoints/vitpose-h.pth --img-root / --json-file {input_json} \
-                --out-json {output_json}"
-            success = os.system(command) == 0
-            print("Done detecting pose")
+            if success:
+                print("Detecting pose")
+                command = f'"{config.pose_python}" pose.py {config.pose_home}/configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/ViTPose_huge_coco_256x192.py \
+                    {config.pose_home}/checkpoints/vitpose-h.pth --img-root / --json-file {input_json} \
+                    --out-json {output_json}'
+                success = os.system(command) == 0
+                print("Done detecting pose")
 
 
-    #6. generate cropped images
+    # 6. generate cropped images
     if args.pipeline['crops'] and success:
-        print("Generate crops")
-        try:
-            crops_destination_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'], 'imgs')
-            Path(crops_destination_dir).mkdir(parents=True, exist_ok=True)
-            if legible_results is None:
-                with open(full_legibile_path, "r") as outfile:
-                    legible_results = json.load(outfile)
-            helpers.generate_crops(output_json, crops_destination_dir, legible_results)
-        except Exception as e:
-            print(e)
-            success = False
-        print("Done generating crops")
+        crops_destination_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'], 'imgs')
+        if os.path.isdir(crops_destination_dir) and len(os.listdir(crops_destination_dir)) > 0:
+            print(f"Generate crops: SKIPPED ({len(os.listdir(crops_destination_dir))} crop files already exist)")
+        else:
+            print("Generate crops")
+            try:
+                Path(crops_destination_dir).mkdir(parents=True, exist_ok=True)
+                if legible_results is None:
+                    with open(full_legibile_path, "r") as outfile:
+                        legible_results = json.load(outfile)
+                helpers.generate_crops(output_json, crops_destination_dir, legible_results)
+            except Exception as e:
+                print(e)
+                success = False
+            print("Done generating crops")
 
     str_result_file = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                    config.dataset['SoccerNet'][args.part]['jersey_id_result'])
-    #7. run STR system on all crops
+    # 7. run STR system on all crops
     if args.pipeline['str'] and success:
-        print("Predict numbers")
-        image_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
+        if _output_exists(str_result_file):
+            print("Predict numbers: SKIPPED (output exists)")
+        else:
+            print("Predict numbers")
+            image_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
 
-        command = f"conda run -n {config.str_env} python3 str.py  {config.dataset['SoccerNet']['str_model']}\
-            --data_root={image_dir} --batch_size=1 --inference --result_file {str_result_file}"
-        success = os.system(command) == 0
-        print("Done predict numbers")
+            command = f'"{config.str_python}" str.py  {config.dataset["SoccerNet"]["str_model"]}\
+                --data_root={image_dir} --batch_size=1 --inference --result_file {str_result_file}'
+            success = os.system(command) == 0
+            print("Done predict numbers")
 
-    #str_result_file = os.path.join(config.dataset['SoccerNet']['working_dir'], "val_jersey_id_predictions.json")
+    final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
+
+    # 8. combine tracklet results
     if args.pipeline['combine'] and success:
-        #8. combine tracklet results
-        analysis_results = None
-        #read predicted results, stack unique predictions, sum confidence scores for each, choose argmax
-        results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
-        #results_dict, analysis_results = helpers.process_jersey_id_predictions_raw(str_result_file, useTS=True)
-        #results_dict, analysis_results = helpers.process_jersey_id_predictions_bayesian(str_result_file, useTS=True, useBias=True, useTh=True)
+        if _output_exists(final_results_path):
+            print("Combine results: SKIPPED (output exists)")
+            with open(final_results_path, 'r') as f:
+                consolidated_dict = json.load(f)
+        else:
+            analysis_results = None
+            results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
 
-        # add illegible tracklet predictions
-        consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
+            consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 
-        #save results as json
-        final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
-        with open(final_results_path, 'w') as f:
-            json.dump(consolidated_dict, f)
+            with open(final_results_path, 'w') as f:
+                json.dump(consolidated_dict, f)
 
+    # 9. evaluate accuracy
     if args.pipeline['eval'] and success:
-        #9. evaluate accuracy
         if consolidated_dict is None:
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
@@ -376,7 +401,7 @@ if __name__ == '__main__':
                        "feat": True,
                        "filter": True,
                        "legible": True,
-                       "legible_eval": False,
+                       "legible_eval": True,
                        "pose": True,
                        "crops": True,
                        "str": True,

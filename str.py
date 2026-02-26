@@ -15,16 +15,25 @@
 # limitations under the License.
 
 import argparse
+import os
 import string
 import sys
 from dataclasses import dataclass
 from typing import List
 
-ROOT = './str/parseq/'
-sys.path.append(str(ROOT))  # add ROOT to PATH
+import configuration as _cfg
+ROOT = os.path.join(_cfg._main_repo, 'str/parseq/')
+sys.path.append(str(ROOT))
 
 
 import torch
+
+_orig_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
 from torch import nn, optim
 from torch.nn import functional as F
 
@@ -34,7 +43,6 @@ from strhub.data.module import SceneTextDataModule
 from strhub.models.utils import load_from_checkpoint, parse_model_args
 
 from PIL import Image
-import os
 import json
 import csv
 
@@ -245,7 +253,7 @@ def main():
     parser.add_argument('--new', action='store_true', default=False, help='Evaluate on new benchmark datasets')
     parser.add_argument('--custom', action='store_true', default=True, help='Evaluate on custom personal datasets')
     parser.add_argument('--rotation', type=int, default=0, help='Angle of rotation (counter clockwise) in degrees.')
-    parser.add_argument('--device', default='cuda')
+    parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--inference', action='store_true', default=False, help='Run inference and store prediction results')
     parser.add_argument('--tune_temperature', action='store_true', default=False,
                         help='Find best t-scale')

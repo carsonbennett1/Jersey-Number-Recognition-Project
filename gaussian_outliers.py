@@ -7,7 +7,7 @@ import os
 import argparse
 
 def get_main_subject(image_folder, feature_folder, threshold = 3.5, rounds = 3):
-    tracks = os.listdir(image_folder)
+    tracks = [t for t in os.listdir(image_folder) if os.path.isdir(os.path.join(image_folder, t))]
 
     results = {}
     for r in range(rounds):

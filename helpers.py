@@ -507,10 +507,13 @@ def process_jersey_id_predictions_raw(file_path, useTS = False ):
 
     return final_results, final_full_results
 
+def list_dirs(path):
+    return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+
 def identify_soccer_balls(image_dir, soccer_ball_list):
     # check 10 random images for each track, mark as soccer ball if the size matches typical soccer ball size
     ball_list = []
-    tracklets = os.listdir(image_dir)
+    tracklets = list_dirs(image_dir)
     for track in tqdm(tracklets):
         track_path = os.path.join(image_dir, track)
         image_names = os.listdir(track_path)
@@ -778,7 +781,7 @@ def generate_crops_for_split(source, target, split):
     generate_json(all_images, input_json)
 
     print("Extracting pose")
-    command = f"conda run -n {pose_env} python3 pose.py {pose_home}/configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/ViTPose_huge_coco_256x192.py \
+    command = f"python pose.py {pose_home}/configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/ViTPose_huge_coco_256x192.py \
         {pose_home}/checkpoints/vitpose-h.pth --img-root / --json-file {input_json} \
         --out-json {output_json}"
     success = os.system(command) == 0
