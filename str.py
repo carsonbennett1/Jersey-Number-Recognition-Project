@@ -246,14 +246,23 @@ def main():
     parser.add_argument('checkpoint', help="Model checkpoint (or 'pretrained=<model_id>')")
     parser.add_argument('--data_root', default='data')
     parser.add_argument('--batch_size', type=int, default=512)
-    parser.add_argument('--num_workers', type=int, default=4)
+    # Use fewer workers on Windows to avoid multiprocessing overhead
+    default_num_workers = 0 if os.name == 'nt' else 4
+    parser.add_argument('--num_workers', type=int, default=default_num_workers, help='Number of DataLoader workers (0 recommended for Windows)')
     parser.add_argument('--cased', action='store_true', default=False, help='Cased comparison')
     parser.add_argument('--punctuation', action='store_true', default=False, help='Check punctuation')
     parser.add_argument('--std', action='store_true', default=False, help='Evaluate on standard benchmark datasets')
     parser.add_argument('--new', action='store_true', default=False, help='Evaluate on new benchmark datasets')
     parser.add_argument('--custom', action='store_true', default=True, help='Evaluate on custom personal datasets')
     parser.add_argument('--rotation', type=int, default=0, help='Angle of rotation (counter clockwise) in degrees.')
-    parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
+    # Improved device detection: CUDA > MPS > CPU
+    default_device = 'cpu'
+    if torch.cuda.is_available():
+        default_device = 'cuda'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        default_device = 'mps'
+    
+    parser.add_argument('--device', default=default_device, help='Device for inference (cuda, mps, or cpu)')
     parser.add_argument('--inference', action='store_true', default=False, help='Run inference and store prediction results')
     parser.add_argument('--tune_temperature', action='store_true', default=False,
                         help='Find best t-scale')

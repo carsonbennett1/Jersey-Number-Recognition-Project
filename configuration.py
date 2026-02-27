@@ -1,20 +1,42 @@
 import os
+import sys
 
-_main_repo = r'C:\Users\aakas\uni\deep-lraening\project\Jersey-Number-Recognition-Project'
-_conda_base = r'C:\Users\aakas\miniconda3\envs'
+# Detect the project root - derive from this file's location
+_main_repo = os.environ.get('JERSEY_PROJECT_ROOT')
+if not _main_repo:
+    _main_repo = os.path.dirname(os.path.abspath(__file__))
+
+# Detect conda base - allow override via environment variable
+_conda_base = os.environ.get('JERSEY_CONDA_BASE')
+if not _conda_base:
+    if os.name == 'nt':  # Windows
+        _conda_base = os.path.join(os.path.expanduser('~'), 'miniconda3', 'envs')
+    else:  # Mac/Linux
+        _conda_base = os.path.join(os.path.expanduser('~'), 'miniconda3', 'envs')
+
+# Determine Python executable name based on OS
+_python_exe = 'python.exe' if os.name == 'nt' else 'python'
+_python_bin_dir = '' if os.name == 'nt' else 'bin'
+
+# Helper to build Python executable path for each environment
+def _get_python_path(env_name):
+    if os.name == 'nt':
+        return os.path.join(_conda_base, env_name, _python_exe)
+    else:
+        return os.path.join(_conda_base, env_name, _python_bin_dir, _python_exe)
 
 pose_home = os.path.join(_main_repo, 'pose/ViTPose')
 pose_env = 'vitpose2'
-pose_python = os.path.join(_conda_base, 'vitpose2', 'python.exe')
+pose_python = _get_python_path(pose_env)
 
 str_home = os.path.join(_main_repo, 'str/parseq/')
 str_env = 'parseq2'
-str_python = os.path.join(_conda_base, 'parseq2', 'python.exe')
+str_python = _get_python_path(str_env)
 str_platform = 'cu113'
 
 # centroids
 reid_env = 'centroids'
-reid_python = os.path.join(_conda_base, 'jersey', 'python.exe')
+reid_python = _get_python_path('jersey')
 reid_script = 'centroid_reid.py'
 
 reid_home = os.path.join(_main_repo, 'reid/')

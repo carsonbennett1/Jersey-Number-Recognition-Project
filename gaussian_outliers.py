@@ -14,7 +14,8 @@ def get_main_subject(image_folder, feature_folder, threshold = 3.5, rounds = 3):
         results[r] = {x: [] for x in tracks}
 
     for tr in tqdm(tracks):
-        images = os.listdir(os.path.join(image_folder, tr))
+        images = [f for f in os.listdir(os.path.join(image_folder, tr)) 
+                  if not f.startswith('.') and os.path.isfile(os.path.join(image_folder, tr, f))]
         features_path = os.path.join(feature_folder, f"{tr}_features.npy")
         #print(features_path)
         with open(features_path, 'rb') as f:

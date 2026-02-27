@@ -49,8 +49,15 @@ def main():
         default='',
         help='Root of the output img file. '
              'Default not saving the visualization images.')
+    # Improved device detection: CUDA > MPS > CPU
+    default_device = 'cpu'
+    if torch.cuda.is_available():
+        default_device = 'cuda:0'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        default_device = 'mps'
+    
     parser.add_argument(
-        '--device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='Device used for inference')
+        '--device', default=default_device, help='Device used for inference (cuda, mps, or cpu)')
     parser.add_argument(
         '--kpt-thr', type=float, default=0.3, help='Keypoint score threshold')
     parser.add_argument(
@@ -68,7 +75,9 @@ def main():
 
     print(f"Pose device: {args.device}")
 
-    torch.backends.cudnn.benchmark = True
+    # cudnn.benchmark only works on CUDA
+    if 'cuda' in args.device:
+        torch.backends.cudnn.benchmark = True
 
     coco = COCO(args.json_file)
     pose_model = init_pose_model(

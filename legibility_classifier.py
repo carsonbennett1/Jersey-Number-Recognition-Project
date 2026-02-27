@@ -343,8 +343,17 @@ def test_model(model, subset, result_path=None):
 
 def load_legibility_model(model_path, arch='resnet18', device=None):
     if device is None:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    cudnn.benchmark = True
+        # Improved device detection: CUDA > MPS > CPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    
+    # cudnn.benchmark only works on CUDA
+    if device.type == 'cuda':
+        cudnn.benchmark = True
 
     state_dict = torch.load(model_path, map_location=device, weights_only=False)
     if arch == 'resnet18':
@@ -371,12 +380,20 @@ def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, dev
     if model is None:
         model, device = load_legibility_model(model_path, arch=arch, device=device)
     if device is None:
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # Improved device detection: CUDA > MPS > CPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
 
-    use_amp = device.type == 'cuda'
+    # Enable AMP for CUDA and MPS (PyTorch 2.0+ supports MPS autocast)
+    use_amp = device.type in ('cuda', 'mps')
+    autocast_device = device.type
 
     results = []
-    with torch.inference_mode(), torch.amp.autocast('cuda', enabled=use_amp):
+    with torch.inference_mode(), torch.amp.autocast(autocast_device, enabled=use_amp):
         for inputs in dataloader:
             inputs = inputs.to(device)
             outputs = model(inputs)

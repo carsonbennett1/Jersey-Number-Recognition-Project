@@ -363,13 +363,13 @@ def soccer_net_pipeline(args):
     final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
 
     # 8. combine tracklet results
+    analysis_results = None  # Initialize to avoid UnboundLocalError when skipped
     if args.pipeline['combine'] and success:
         if _output_exists(final_results_path):
             print("Combine results: SKIPPED (output exists)")
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            analysis_results = None
             results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)

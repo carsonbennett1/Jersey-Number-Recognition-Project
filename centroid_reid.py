@@ -56,13 +56,25 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
     opts = ["MODEL.PRETRAIN_PATH", MODEL_FILE, "MODEL.PRETRAINED", True, "TEST.ONLY_TEST", True, "MODEL.RESUME_TRAINING", False]
     cfg.merge_from_list(opts)
     
-    use_cuda = True if torch.cuda.is_available() and cfg.GPU_IDS else False
+    # Improved device detection: CUDA > MPS > CPU
+    use_cuda = torch.cuda.is_available() and cfg.GPU_IDS
+    use_mps = not use_cuda and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+    
     model = CTLModel.load_from_checkpoint(cfg.MODEL.PRETRAIN_PATH, cfg=cfg)
 
     if use_cuda:
         model.to('cuda')
         torch.backends.cudnn.benchmark = True
-        print("using GPU")
+        device = 'cuda'
+        print("using GPU (CUDA)")
+    elif use_mps:
+        model.to('mps')
+        device = 'mps'
+        print("using GPU (MPS)")
+    else:
+        device = 'cpu'
+        print("using CPU")
+    
     model.eval()
 
     tracks = [t for t in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, t))]
@@ -81,12 +93,17 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
             skipped += 1
             continue
 
-        with torch.inference_mode(), torch.amp.autocast('cuda', enabled=use_cuda):
+        # Enable AMP for CUDA and MPS
+        use_amp = device in ('cuda', 'mps')
+        autocast_device = device if use_amp else 'cpu'
+        
+        with torch.inference_mode(), torch.amp.autocast(autocast_device, enabled=use_amp):
             for img_path in images:
                 img = cv2.imread(os.path.join(track_path, img_path))
                 input_img = Image.fromarray(img)
                 input_img = torch.stack([val_transforms(input_img)])
-                _, global_feat = model.backbone(input_img.cuda() if use_cuda else input_img)
+                input_img = input_img.to(device)
+                _, global_feat = model.backbone(input_img)
                 global_feat = model.bn(global_feat)
                 features.append(global_feat.cpu().float().numpy().reshape(-1,))
 
