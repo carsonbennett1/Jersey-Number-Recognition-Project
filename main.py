@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import subprocess
 import legibility_classifier as lc
 import numpy as np
 import json
@@ -11,6 +12,15 @@ from pathlib import Path
 
 def list_dirs(path):
     return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+
+def _run_cmd(args_list, cwd=None):
+    """Run command via subprocess (avoids Windows cmd.exe path parsing issues)."""
+    try:
+        result = subprocess.run(args_list, cwd=cwd or os.getcwd())
+        return result.returncode == 0
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}")
+        return False
 
 def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'gauss', exclude_balls=True):
     root_dir = config.dataset['SoccerNet']['root_dir']
@@ -170,28 +180,21 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
     return dict
 
 def train_parseq(args):
+    parseq_dir = config.str_home
+    current_dir = os.getcwd()
     if args.dataset == 'Hockey':
         print("Train PARSeq for Hockey")
-        parseq_dir = config.str_home
-        current_dir = os.getcwd()
-        os.chdir(parseq_dir)
         data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
-        command = f'"{config.str_python}" train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 ' \
-                  f'pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2'
-        success = os.system(command) == 0
-        os.chdir(current_dir)
-        print("Done training")
     else:
         print("Train PARSeq for Soccer")
-        parseq_dir = config.str_home
-        current_dir = os.getcwd()
-        os.chdir(parseq_dir)
         data_root = os.path.join(current_dir, config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet']['numbers_data'])
-        command = f'"{config.str_python}" train.py +experiment=parseq dataset=real data.root_dir={data_root} trainer.max_epochs=25 ' \
-                  f'pretrained=parseq trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2'
-        success = os.system(command) == 0
-        os.chdir(current_dir)
-        print("Done training")
+    success = _run_cmd([
+        config.str_python, 'train.py',
+        '+experiment=parseq', 'dataset=real', f'data.root_dir={data_root}',
+        'trainer.max_epochs=25', 'pretrained=parseq', 'trainer.devices=1',
+        'trainer.val_check_interval=1', 'data.batch_size=128', 'data.max_label_length=2'
+    ], cwd=parseq_dir)
+    print("Done training")
 
 
 def hockey_pipeline(args):
@@ -201,21 +204,25 @@ def hockey_pipeline(args):
     #            "str": True}
     success = True
     # test legibility classification
+    _project_root = os.path.dirname(os.path.abspath(__file__))
     if args.pipeline['legible']:
         root_dir = os.path.join(config.dataset["Hockey"]["root_dir"], config.dataset["Hockey"]["legibility_data"])
-
         print("Test legibility classifier")
-        command = f"python legibility_classifier.py --data {root_dir} --arch resnet34 --trained_model {config.dataset['Hockey']['legibility_model']}"
-        success = os.system(command) == 0
+        legibility_script = os.path.join(_project_root, 'legibility_classifier.py')
+        success = _run_cmd([
+            sys.executable, legibility_script, '--data', root_dir,
+            '--arch', 'resnet34', '--trained_model', config.dataset['Hockey']['legibility_model']
+        ], cwd=_project_root)
         print("Done legibility classifier")
 
     if success and args.pipeline['str']:
         print("Predict numbers")
-        current_dir = os.getcwd()
-        data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
-        command = f'"{config.str_python}" str.py  {config.dataset["Hockey"]["str_model"]}\
-            --data_root={data_root}'
-        success = os.system(command) == 0
+        data_root = os.path.join(_project_root, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
+        str_script = os.path.join(_project_root, 'str.py')
+        success = _run_cmd([
+            config.str_python, str_script, config.dataset["Hockey"]["str_model"],
+            '--data_root', data_root
+        ], cwd=_project_root)
         print("Done predict numbers")
 
 def _output_exists(path):
@@ -227,6 +234,7 @@ def soccer_net_pipeline(args):
     consolidated_dict = None
     Path(config.dataset['SoccerNet']['working_dir']).mkdir(parents=True, exist_ok=True)
     success = True
+    _project_root = os.path.dirname(os.path.abspath(__file__))
 
     image_dir = os.path.join(config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet'][args.part]['images'])
     soccer_ball_list = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -258,14 +266,16 @@ def soccer_net_pipeline(args):
     # 2. generate and store features for each image in each tracklet
     if args.pipeline['feat']:
         print("Generate features")
-        # Use sys.executable (avoids hardcoded conda path - works across devices when run via: conda activate jersey && python main.py)
-        # Use full path for script to avoid "path not found" when CWD differs across devices
+        # Use subprocess (avoids Windows "filename/directory syntax incorrect" from os.system + cmd.exe path parsing)
         if not os.path.isfile(config.reid_script_path):
             print(f"ERROR: centroid_reid.py not found at {config.reid_script_path}. Ensure project is complete.")
             success = False
         else:
-            command = f'"{sys.executable}" "{config.reid_script_path}" --tracklets_folder "{image_dir}" --output_folder "{features_dir}"'
-            success = os.system(command) == 0
+            success = _run_cmd([
+                sys.executable, config.reid_script_path,
+                '--tracklets_folder', image_dir,
+                '--output_folder', features_dir
+            ], cwd=_project_root)
         print("Done generating features")
 
     # 3. identify and remove outliers based on features
@@ -274,8 +284,12 @@ def soccer_net_pipeline(args):
             print("Identify and remove outliers: SKIPPED (output exists)")
         else:
             print("Identify and remove outliers")
-            command = f"python gaussian_outliers.py --tracklets_folder {image_dir} --output_folder {features_dir}"
-            success = os.system(command) == 0
+            gaussian_script = os.path.join(_project_root, 'gaussian_outliers.py')
+            success = _run_cmd([
+                sys.executable, gaussian_script,
+                '--tracklets_folder', image_dir,
+                '--output_folder', features_dir
+            ], cwd=_project_root)
             print("Done removing outliers")
 
     # 4. pass all images through legibility classifier and record results
@@ -327,10 +341,14 @@ def soccer_net_pipeline(args):
 
             if success:
                 print("Detecting pose")
-                command = f'"{config.pose_python}" pose.py {config.pose_home}/configs/body/2d_kpt_sview_rgb_img/topdown_heatmap/coco/ViTPose_huge_coco_256x192.py \
-                    {config.pose_home}/checkpoints/vitpose-h.pth --img-root / --json-file {input_json} \
-                    --out-json {output_json}'
-                success = os.system(command) == 0
+                pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
+                pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
+                pose_script = os.path.join(_project_root, 'pose.py')
+                success = _run_cmd([
+                    config.pose_python, pose_script,
+                    pose_config, pose_checkpoint,
+                    '--img-root', '/', '--json-file', input_json, '--out-json', output_json
+                ], cwd=_project_root)
                 print("Done detecting pose")
 
 
@@ -360,11 +378,12 @@ def soccer_net_pipeline(args):
             print("Predict numbers: SKIPPED (output exists)")
         else:
             print("Predict numbers")
-            image_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
-
-            command = f'"{config.str_python}" str.py  {config.dataset["SoccerNet"]["str_model"]}\
-                --data_root={image_dir} --batch_size=1 --inference --result_file {str_result_file}'
-            success = os.system(command) == 0
+            crops_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
+            str_script = os.path.join(_project_root, 'str.py')
+            success = _run_cmd([
+                config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
+                '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
+            ], cwd=_project_root)
             print("Done predict numbers")
 
     final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
