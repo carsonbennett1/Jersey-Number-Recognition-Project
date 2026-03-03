@@ -9,10 +9,15 @@ if not _main_repo:
 # Detect conda base - allow override via environment variable
 _conda_base = os.environ.get('JERSEY_CONDA_BASE')
 if not _conda_base:
-    if os.name == 'nt':  # Windows
-        _conda_base = os.path.join(os.path.expanduser('~'), 'miniconda3', 'envs')
-    else:  # Mac/Linux
-        _conda_base = os.path.join(os.path.expanduser('~'), 'miniconda3', 'envs')
+    _home = os.path.expanduser('~')
+    # Try common conda locations (miniconda3, anaconda3, conda3)
+    for _conda_name in ('miniconda3', 'anaconda3', 'conda3'):
+        _candidate = os.path.join(_home, _conda_name, 'envs')
+        if os.path.isdir(_candidate):
+            _conda_base = _candidate
+            break
+    else:
+        _conda_base = os.path.join(_home, 'miniconda3', 'envs')
 
 # Determine Python executable name based on OS
 _python_exe = 'python.exe' if os.name == 'nt' else 'python'
@@ -38,6 +43,8 @@ str_platform = 'cu113'
 reid_env = 'centroids'
 reid_python = _get_python_path('jersey')
 reid_script = 'centroid_reid.py'
+# Full path to reid script - use this when spawning subprocesses to avoid CWD/path issues across devices
+reid_script_path = os.path.join(_main_repo, 'centroid_reid.py')
 
 reid_home = os.path.join(_main_repo, 'reid/')
 

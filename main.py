@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import legibility_classifier as lc
 import numpy as np
 import json
@@ -257,8 +258,14 @@ def soccer_net_pipeline(args):
     # 2. generate and store features for each image in each tracklet
     if args.pipeline['feat']:
         print("Generate features")
-        command = f'"{config.reid_python}" {config.reid_script} --tracklets_folder {image_dir} --output_folder {features_dir}'
-        success = os.system(command) == 0
+        # Use sys.executable (avoids hardcoded conda path - works across devices when run via: conda activate jersey && python main.py)
+        # Use full path for script to avoid "path not found" when CWD differs across devices
+        if not os.path.isfile(config.reid_script_path):
+            print(f"ERROR: centroid_reid.py not found at {config.reid_script_path}. Ensure project is complete.")
+            success = False
+        else:
+            command = f'"{sys.executable}" "{config.reid_script_path}" --tracklets_folder "{image_dir}" --output_folder "{features_dir}"'
+            success = os.system(command) == 0
         print("Done generating features")
 
     # 3. identify and remove outliers based on features
