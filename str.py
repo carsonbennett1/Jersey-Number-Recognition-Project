@@ -55,6 +55,13 @@ class Result:
     confidence: float
     label_length: float
 
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
+elif torch.cuda.is_available():
+    device = torch.device("cuda")
+else:
+    device = torch.device("cpu")
+
 
 def print_results_table(results: List[Result], file=None):
     w = max(map(len, map(getattr, results, ['dataset'] * len(results))))
@@ -131,7 +138,7 @@ def temperature_scale(logits, t):
     new_logits = torch.div(logits, temp)
     return new_logits
 
-temperature = nn.Parameter(torch.ones(1).cuda() * 1.5)
+temperature = nn.Parameter(torch.ones(1).to(device) * 1.5)
 def set_temperature(model, data_root, img_size):
     """
     Tune the tempearature of the model (using the validation set).

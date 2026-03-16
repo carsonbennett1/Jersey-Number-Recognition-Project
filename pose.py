@@ -12,7 +12,15 @@ sys.path.append(str(ROOT))  # add ROOT to PATH
 
 from argparse import ArgumentParser
 
-from xtcocotools.coco import COCO
+try:
+    # Original import – works for anyone who already has xtcocotools
+    from xtcocotools.coco import COCO
+    print("Using xtcocotools.COCO")
+except ImportError:
+    # Fallback for environments (Mac) where xtcocotools won't install
+    from pycocotools.coco import COCO
+    print("Using pycocotools.COCO")
+
 
 from mmpose.apis import (inference_top_down_pose_model, init_pose_model,
                          vis_pose_result)
