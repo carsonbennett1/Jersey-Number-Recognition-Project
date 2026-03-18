@@ -344,6 +344,7 @@ def soccer_net_pipeline(args):
                 pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
                 pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
                 pose_script = os.path.join(_project_root, 'pose.py')
+                config.pose_python = sys.executable
                 success = _run_cmd([
                     config.pose_python, pose_script,
                     pose_config, pose_checkpoint,
