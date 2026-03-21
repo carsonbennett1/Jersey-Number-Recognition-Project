@@ -425,6 +425,29 @@ def predict_jersey_number(image_predictions, useBias=False):
 
     return batch_tokens, batch_probs
 
+def candicate_and_frame_processing(confidence_values, L, e, qt):
+    # Should be size 11 here, 0-9 = 10 + 1 for E (End token)
+    columns = confidence_values.shape[1]
+    all_score_k_values = []
+    
+    for i in range(columns):
+        frame_values = []
+        for j in range(len(confidence_values)):
+            vt_k = qt * (np.log(confidence_values[j][i]) + e)
+            frame_values.append(vt_k)
+        
+        s_k = np.argsort(frame_values)
+        s_k_top_L = s_k[-L:]
+        
+        # need to extract new indicies from top-L sorted confidence values
+        top_L_indices = "" # HERE
+        
+        score_k = np.sum(top_L_indices)
+        all_score_k_values.append(score_k)
+    
+    k_hat = np.argmax(all_score_k_values)
+    return k_hat
+
 def predict_jersey_number_top_L(image_predictions, bias=False):
     tens_priors, unit_priors = initialize_priors(bias)
     tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
@@ -432,15 +455,46 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     L = 4
     e = 1e-10
 
-    log_likelihoods_tens = np.log(tens_likelihood) + e
-    log_likelihoods_units = np.log(unit_likelihood) + e
-
     # legibility_results = config.dataset['SoccerNet']['working_dir']['raw_legible_result']
     qt = 1  # Change eventually
-    
-    log_likelihoods_with_qt = qt * log_likelihoods_tens
-    log_likelihoods_units_with_qt = qt * log_likelihoods_units
 
+    # Need to do this twice
+    # Tens digit gets 0-9 prediction for jersey number 0?
+    # unit digit gets 0-9 prediction for jerysey number ?0
+    tens_scores = candicate_and_frame_processing(tens_likelihood, L, e, qt)
+    unit_scores = candicate_and_frame_processing(unit_likelihood, L, e, qt)
+
+
+def process_jersey_id_predictions_top_L(file_path, useBias = False):
+    all_results = {}
+    final_results = {}
+    with open(file_path, 'r') as f:
+        results_dict = json.load(f)
+    for name in results_dict.keys():
+        tmp = name.split('_')
+        tracklet = tmp[0]
+
+        if tracklet not in all_results:
+            all_results[tracklet] = []
+            final_results[tracklet] = -1  # default
+        else:
+            raw_result = results_dict[name]['logits']
+            raw_result = apply_ts(raw_result)
+
+        all_results[tracklet].append(raw_result)
+
+    final_full_results = {}
+    for tracklet in all_results.keys():
+        if len(all_results[tracklet]) == 0:
+            continue
+        results = np.array(all_results[tracklet])
+
+        best_prediction, probs = predict_jersey_number_top_L(results, useBias=useBias)
+
+        final_results[tracklet] = str(int(best_prediction))
+        final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
+
+    return final_results, final_full_results
 
 def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = False, useTh = False):
     all_results = {}

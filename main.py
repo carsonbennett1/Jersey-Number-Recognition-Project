@@ -397,7 +397,7 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
+            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, useBias=True)
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 

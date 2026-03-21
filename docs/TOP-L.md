@@ -37,3 +37,15 @@ However, let's assume that jersey number 22 reported very few high confidence ra
 
 #### In Summary
 For each jersey number possible, compute frame-by-frame confidence of the tracklet with the most confident values (top-L). If frame-by-frame confidence is low or staggers, this is not our jersey number. However, if the frame-by-frame confidence is relatively high, then this number could likely be the actual one in the tracklet.
+
+#### Main Pipeline Integration
+Originally, at step 8 (combine tracklet results), the pipeline calls the method "helpers.process_jersey_id_predictions(...)" which can be found in the helpers.py file (line 611). The method then goes on to call a sub-method "find_best_prediction(...)." Interestingly enough, there are also two other methods that can be swapped in at step 8 that appear to have not made the final cut as seen with "process_jersey_id_predictions_raw(...), and process_jersey_id_predictions_bayersian(...)."
+
+Our new methods will swap out process_jersey_id_predictions(...) and find_best_predictions(...) with the workflow below:
+
+```
+main.py
+  └──> helpers.process_jersey_id_predictsion_top_L(...)
+            └──> predict_jersey_number_top_L(...)
+                     └──> candidate_and_frame_processing(...)
+```
