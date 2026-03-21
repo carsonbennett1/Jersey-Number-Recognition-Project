@@ -71,7 +71,16 @@ Download and place under jersey-number-pipeline/models/.
 
 
 ## Configuration:
-Update configuration.py if required to set custom path to data or dependencies. 
+Update configuration.py if required to set custom path to data or dependencies.
+
+**For cross-platform usage (Windows/Mac/Linux):** The project now automatically detects your OS and configures paths, Python executables, and GPU acceleration (CUDA/MPS/CPU) accordingly. See [DEVICE_AND_PLATFORM.md](DEVICE_AND_PLATFORM.md) for details on:
+- Moving the project between machines
+- Overriding auto-detected paths via environment variables
+- Platform-specific behavior (DataLoader workers, GPU types, etc.)
+
+**Environment variables (optional):**
+- `JERSEY_PROJECT_ROOT`: Override project root path (default: auto-detected from configuration.py location)
+- `JERSEY_CONDA_BASE`: Override conda environments path (default: ~/miniconda3/envs) 
 
 ## Inference:
 To run the full inference pipeline for SoccerNet:

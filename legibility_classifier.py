@@ -19,8 +19,6 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
-from sam.sam import SAM
-
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
 
@@ -343,17 +341,21 @@ def test_model(model, subset, result_path=None):
     return epoch_acc
 
 
-# run inference on a list of files
-def run(image_paths, model_path, threshold=0.5, arch='resnet18'):
-    # setup data
-    dataset = UnlabelledJerseyNumberLegibilityDataset(image_paths, arch=arch)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4,
-                                                  shuffle=False, num_workers=4)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    cudnn.benchmark = True
+def load_legibility_model(model_path, arch='resnet18', device=None):
+    if device is None:
+        # Improved device detection: CUDA > MPS > CPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    
+    # cudnn.benchmark only works on CUDA
+    if device.type == 'cuda':
+        cudnn.benchmark = True
 
-    #load model
-    state_dict = torch.load(model_path, map_location=device)
+    state_dict = torch.load(model_path, map_location=device, weights_only=False)
     if arch == 'resnet18':
         model_ft = LegibilityClassifier()
     elif arch == 'vit':
@@ -366,24 +368,43 @@ def run(image_paths, model_path, threshold=0.5, arch='resnet18'):
     model_ft.load_state_dict(state_dict)
     model_ft = model_ft.to(device)
     model_ft.eval()
+    return model_ft, device
 
-    # run classifier
-    results = []
-    for inputs in dataloader:
-        # print(f"input and label sizes:{len(inputs), len(labels)}")
-        inputs = inputs.to(device)
 
-        # zero the parameter gradients
-        torch.set_grad_enabled(False)
-        outputs = model_ft(inputs)
+# run inference on a list of files
+def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, device=None):
+    dataset = UnlabelledJerseyNumberLegibilityDataset(image_paths, arch=arch)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4,
+                                                  shuffle=False, num_workers=0)
 
-        if threshold > 0:
-            outputs = (outputs>threshold).float()
+    if model is None:
+        model, device = load_legibility_model(model_path, arch=arch, device=device)
+    if device is None:
+        # Improved device detection: CUDA > MPS > CPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device("mps")
         else:
-            outputs = outputs.float()
-        preds = outputs.cpu().detach().numpy()
-        flattened_preds = preds.flatten().tolist()
-        results += flattened_preds
+            device = torch.device("cpu")
+
+    # Enable AMP for CUDA and MPS (PyTorch 2.0+ supports MPS autocast)
+    use_amp = device.type in ('cuda', 'mps')
+    autocast_device = device.type
+
+    results = []
+    with torch.inference_mode(), torch.amp.autocast(autocast_device, enabled=use_amp):
+        for inputs in dataloader:
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+
+            if threshold > 0:
+                outputs = (outputs>threshold).float()
+            else:
+                outputs = outputs.float()
+            preds = outputs.cpu().numpy()
+            flattened_preds = preds.flatten().tolist()
+            results += flattened_preds
 
     return results
 
@@ -460,7 +481,7 @@ if __name__ == '__main__':
             else:
                 load_model_path = args.trained_model_path
             # load weights
-            state_dict = torch.load(load_model_path, map_location=device)
+            state_dict = torch.load(load_model_path, map_location=device, weights_only=False)
             if hasattr(state_dict, '_metadata'):
                 del state_dict._metadata
             model_ft.load_state_dict(state_dict)
@@ -468,7 +489,7 @@ if __name__ == '__main__':
         model_ft = model_ft.to(device)
         criterion = nn.BCELoss()
         if args.sam:
-            # Observe that all parameters are being optimized
+            from sam.sam import SAM
             base_optimizer = torch.optim.SGD
             optimizer_ft = SAM(model_ft.parameters(), base_optimizer, lr=0.001, momentum=0.9)
 
@@ -491,7 +512,7 @@ if __name__ == '__main__':
 
     else:
         #load weights
-        state_dict = torch.load(args.trained_model_path, map_location=device)
+        state_dict = torch.load(args.trained_model_path, map_location=device, weights_only=False)
         if hasattr(state_dict, '_metadata'):
             del state_dict._metadata
         model_ft.load_state_dict(state_dict)

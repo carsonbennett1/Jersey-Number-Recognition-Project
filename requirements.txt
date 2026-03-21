@@ -1,0 +1,7 @@
+# Main pipeline dependencies (install in jersey env: pip install -r requirements.txt)
+torch>=1.9.0
+torchvision
+opencv-python
+numpy
+pandas
+tqdm
