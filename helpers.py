@@ -425,6 +425,22 @@ def predict_jersey_number(image_predictions, useBias=False):
 
     return batch_tokens, batch_probs
 
+def predict_jersey_number_top_L(image_predictions, bias=False):
+    tens_priors, unit_priors = initialize_priors(bias)
+    tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
+
+    L = 4
+    e = 1e-10
+
+    log_likelihoods_tens = np.log(tens_likelihood) + e
+    log_likelihoods_units = np.log(unit_likelihood) + e
+
+    # legibility_results = config.dataset['SoccerNet']['working_dir']['raw_legible_result']
+    qt = 1  # Change eventually
+    
+    log_likelihoods_with_qt = qt * log_likelihoods_tens
+    log_likelihoods_units_with_qt = qt * log_likelihoods_units
+
 
 def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = False, useTh = False):
     all_results = {}
