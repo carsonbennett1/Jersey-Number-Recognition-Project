@@ -19,21 +19,23 @@ class JerseyNumberMulticlassClassifier(nn.Module):
         super().__init__()
         self.backbone = nn.Sequential(*list(models.resnet34(pretrained=True).children())[:-1])
 
-        self.head1 = nn.Linear(512, 100)
-        self.head2 = nn.Linear(512, 10)
-        self.head3 = nn.Linear(512, 11)
+        self.head1 = nn.Linear(512, 100)   # full number (0-99)
+        self.head2 = nn.Linear(512, 10)    # tens digit (0-9)
+        self.head3 = nn.Linear(512, 11)    # units digit (0-10, 10=padding)
+        self.head4 = nn.Linear(512, 2)     # digit count (0=single, 1=double)
 
     def forward(self, input):
         # get backbone features
         backbone_feats = self.backbone(input)
 
-        backbone_feats =backbone_feats.reshape(backbone_feats.size(0), -1)
+        backbone_feats = backbone_feats.reshape(backbone_feats.size(0), -1)
 
         # pass through heads
         h1 = self.head1(backbone_feats)
         h2 = self.head2(backbone_feats)
         h3 = self.head3(backbone_feats)
-        return h1, h2, h3
+        h4 = self.head4(backbone_feats)
+        return h1, h2, h3, h4
 
 
 class SimpleJerseyNumberClassifier(nn.Module):

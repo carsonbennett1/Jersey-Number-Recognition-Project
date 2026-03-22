@@ -80,7 +80,9 @@ dataset = {'SoccerNet':
                         'gauss_filtered': 'val/main_subject_gauss_th=3.5_r=3.json',
                         'pose_input_json': 'pose_input_val.json',
                         'pose_output_json': 'pose_results_val.json',
-                        'jersey_id_result': 'jersey_id_results_validation.json'
+                        'jersey_id_result': 'jersey_id_results_validation.json',
+                        'raw_legible_result': 'raw_legible_val_resnet34.json',
+                        'final_result': 'final_results_val.json'
                     },
                  'train': {
                      'images': 'train/train/images',

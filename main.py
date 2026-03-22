@@ -9,6 +9,11 @@ import helpers
 from tqdm import tqdm
 import configuration as config
 from pathlib import Path
+import torch
+import torch.nn.functional as torchF
+from PIL import Image
+from jersey_number_dataset import data_transforms
+from networks import JerseyNumberMulticlassClassifier
 
 def list_dirs(path):
     return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
@@ -178,6 +183,44 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
         else:
             dict[t] = int(dict[t])
     return dict
+
+def run_multitask_inference(crops_dir, result_file, model_path):
+    """Run multi-task ResNet classifier on torso crops, output PARSeq-compatible JSON."""
+    device = torch.device("cuda:0" if torch.cuda.is_available() else
+                          "mps" if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() else
+                          "cpu")
+    model = JerseyNumberMulticlassClassifier()
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    model = model.to(device)
+    model.eval()
+
+    transform = data_transforms['test']['resnet']
+    imgs_dir = os.path.join(crops_dir, 'imgs')
+    filenames = sorted(os.listdir(imgs_dir))
+    results = {}
+
+    with torch.no_grad():
+        for filename in tqdm(filenames, desc="Multi-task inference"):
+            image = Image.open(os.path.join(imgs_dir, filename)).convert('RGB')
+            image = transform(image).unsqueeze(0).to(device)
+            h1, h2, h3, h4 = model(image)
+            probs = torchF.softmax(h1, dim=1)[0]
+            pred_class = int(torch.argmax(probs).item())
+            pred_conf = float(probs[pred_class].item())
+            label = str(pred_class) if pred_class > 0 else "-1"
+            # confidence format: [prob, 1.0] so product(confidence[:-1]) = prob
+            results[filename] = {
+                'label': label,
+                'confidence': [pred_conf, 1.0],
+                'raw': probs.cpu().tolist(),
+                'logits': h1[0].cpu().tolist()
+            }
+
+    with open(result_file, 'w') as f:
+        json.dump(results, f)
+    print(f"Multi-task inference complete: {len(results)} predictions saved")
+    return True
 
 def train_parseq(args):
     parseq_dir = config.str_home
@@ -378,13 +421,21 @@ def soccer_net_pipeline(args):
         if _output_exists(str_result_file):
             print("Predict numbers: SKIPPED (output exists)")
         else:
-            print("Predict numbers")
             crops_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
-            str_script = os.path.join(_project_root, 'str.py')
-            success = _run_cmd([
-                config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
-                '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
-            ], cwd=_project_root)
+            if args.pipeline.get('use_multitask_classifier', False):
+                # Approach 1: Multi-task ResNet classifier (runs in-process)
+                print("Predict numbers (multi-task classifier)")
+                multitask_model_path = args.pipeline.get('multitask_model_path',
+                    os.path.join(_project_root, 'experiments', 'multitask_resnet34.pth'))
+                success = run_multitask_inference(crops_dir, str_result_file, multitask_model_path)
+            else:
+                # Original PARSeq STR (subprocess in parseq2 env)
+                print("Predict numbers (PARSeq)")
+                str_script = os.path.join(_project_root, 'str.py')
+                success = _run_cmd([
+                    config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
+                    '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
+                ], cwd=_project_root)
             print("Done predict numbers")
 
     final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
@@ -433,7 +484,9 @@ if __name__ == '__main__':
                        "crops": True,
                        "str": True,
                        "combine": True,
-                       "eval": True}
+                       "eval": True,
+                       "use_multitask_classifier": True,  # set True for Approach 1
+                       "multitask_model_path": "experiments/multitask_resnet34.pth"}
             args.pipeline = actions
             soccer_net_pipeline(args)
         elif args.dataset == 'Hockey':

@@ -95,20 +95,20 @@ class JerseyNumberMultitaskDataset(Dataset):
 
     def get_digit_labels(self, label):
         if label < 10:
-            return label, 10
+            return label, 10, 0   # (digit, padding, single-digit)
         else:
-            return label // 10, label % 10
+            return label // 10, label % 10, 1   # (tens, units, double-digit)
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
         image = Image.open(img_path).convert('RGB')
         label = self.img_labels.iloc[idx, 1]
-        digit1, digit2 = self.get_digit_labels(label)
+        digit1, digit2, digit_count = self.get_digit_labels(label)
         if not (label> 0 and label < 100 and digit1 < 10 and digit1 > 0 and digit2 > -1 and digit2 < 11):
             print(label, digit1, digit2)
         if self.transform:
             image = self.transform(image)
-        return image, label, digit1, digit2
+        return image, label, digit1, digit2, digit_count
 
 class UnlabelledJerseyNumberLegibilityDataset(Dataset):
     def __init__(self, image_paths, mode='test', arch='resnet18'):

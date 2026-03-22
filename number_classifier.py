@@ -83,8 +83,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     return model
 
 ALPHA = 0.5
-BETA = 0.25
-GAMMA = 0.25
+BETA = 0.15
+GAMMA = 0.15
+DELTA = 0.2
 def train_multitask_model(model, optimizer, scheduler, num_epochs=25):
     image_dataset_train = JerseyNumberMultitaskDataset(annotations_file_train, train_img_dir, 'train')
     image_dataset_test = JerseyNumberMultitaskDataset(annotations_file_test, test_img_dir, 'test')
@@ -123,12 +124,13 @@ def train_multitask_model(model, optimizer, scheduler, num_epochs=25):
             running_corrects = 0
 
             # Iterate over data.
-            for inputs, labels, digits1, digits2 in dataloaders[phase]:
+            for inputs, labels, digits1, digits2, digit_counts in dataloaders[phase]:
                 # print(f"input and label sizes:{len(inputs), len(labels)}")
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 digits1 = digits1.to(device)
                 digits2 = digits2.to(device)
+                digit_counts = digit_counts.to(device)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -136,10 +138,13 @@ def train_multitask_model(model, optimizer, scheduler, num_epochs=25):
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    out1, out2, out3 = model(inputs)
+                    out1, out2, out3, out4 = model(inputs)
                     # print(f"output size is {len(outputs)}")
                     _, preds = torch.max(out1, 1)
-                    loss = ALPHA * criterion(out1, labels) + BETA * criterion(out2, digits1) + GAMMA * criterion(out3, digits2)
+                    loss = (ALPHA * criterion(out1, labels)
+                          + BETA * criterion(out2, digits1)
+                          + GAMMA * criterion(out3, digits2)
+                          + DELTA * criterion(out4, digit_counts))
 
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -187,7 +192,7 @@ def test_model(model, subset, model_type = None):
         # zero the parameter gradients
         torch.set_grad_enabled(False)
         if model_type == 'resnet34_multi':
-            outputs, _, _ = model(inputs)
+            outputs, _, _, _ = model(inputs)
         else:
             outputs = model(inputs)
 
