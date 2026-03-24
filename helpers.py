@@ -426,12 +426,11 @@ def predict_jersey_number(image_predictions, useBias=False):
     return batch_tokens, batch_probs
 
 def candicate_and_frame_processing(confidence_values, L, e, qt):
-    # Should be size 11 here, 0-9 = 10 + 1 for E (End token)
-    columns = confidence_values.shape[1]
+    columns = confidence_values.shape[1]   # Should be size 11 here, 0-9 = 10 + 1 for E (End token)
     all_score_k_values = []
     
     for i in range(columns):
-        frame_values = []
+        frame_values = []  # contain scores
         for j in range(len(confidence_values)):
             vt_k = qt * (np.log(confidence_values[j][i]) + e)
             frame_values.append(vt_k)
@@ -439,9 +438,10 @@ def candicate_and_frame_processing(confidence_values, L, e, qt):
         s_k = np.argsort(frame_values)
         s_k_top_L = s_k[-L:]
         
-        # need to extract new indicies from top-L sorted confidence values
-        top_L_indices = "" # HERE
-        
+        top_L_indices = []  # contain indices
+        for k in range(len(s_k_top_L)):
+            top_L_indices.append(frame_values[s_k_top_L[k]])  # append actual values for position k
+
         score_k = np.sum(top_L_indices)
         all_score_k_values.append(score_k)
     
@@ -453,7 +453,7 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
 
     L = 4
-    e = 1e-10
+    e = 1e-9
 
     # legibility_results = config.dataset['SoccerNet']['working_dir']['raw_legible_result']
     qt = 1  # Change eventually
@@ -464,6 +464,15 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     tens_scores = candicate_and_frame_processing(tens_likelihood, L, e, qt)
     unit_scores = candicate_and_frame_processing(unit_likelihood, L, e, qt)
 
+    batch_tokens = token_list[tens_scores] + token_list[unit_scores]
+    batch_probs = [tens_scores, unit_scores]
+    for i in range(2):
+        if batch_tokens[i] == 'E':
+            batch_tokens = batch_tokens[:i]
+            batch_probs = batch_probs[:i]
+            break
+
+    return batch_tokens, batch_probs
 
 def process_jersey_id_predictions_top_L(file_path, useBias = False):
     all_results = {}
