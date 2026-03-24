@@ -373,10 +373,6 @@ def load_legibility_model(model_path, arch='resnet18', device=None):
 
 # run inference on a list of files
 def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, device=None):
-    dataset = UnlabelledJerseyNumberLegibilityDataset(image_paths, arch=arch)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4,
-                                                  shuffle=False, num_workers=0)
-
     if model is None:
         model, device = load_legibility_model(model_path, arch=arch, device=device)
     if device is None:
@@ -387,6 +383,12 @@ def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, dev
             device = torch.device("mps")
         else:
             device = torch.device("cpu")
+
+    batch_size = 32 if device.type in ('cuda', 'mps') else 4
+    num_workers = 0 if os.name == 'nt' else 4
+    dataset = UnlabelledJerseyNumberLegibilityDataset(image_paths, arch=arch)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                                  shuffle=False, num_workers=num_workers)
 
     # Enable AMP for CUDA and MPS (PyTorch 2.0+ supports MPS autocast)
     use_amp = device.type in ('cuda', 'mps')

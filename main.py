@@ -184,6 +184,20 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
             dict[t] = int(dict[t])
     return dict
 
+class _CropDataset(torch.utils.data.Dataset):
+    """Minimal dataset for loading crop images by filename."""
+    def __init__(self, imgs_dir, filenames, transform):
+        self.imgs_dir = imgs_dir
+        self.filenames = filenames
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, idx):
+        image = Image.open(os.path.join(self.imgs_dir, self.filenames[idx])).convert('RGB')
+        return self.transform(image), idx
+
 def run_multitask_inference(crops_dir, result_file, model_path):
     """Run multi-task ResNet classifier on torso crops, output PARSeq-compatible JSON."""
     device = torch.device("cuda:0" if torch.cuda.is_available() else
@@ -200,22 +214,32 @@ def run_multitask_inference(crops_dir, result_file, model_path):
     filenames = sorted(os.listdir(imgs_dir))
     results = {}
 
+    batch_size = 32 if device.type in ('cuda', 'mps') else 1
+    num_workers = 0 if os.name == 'nt' else 4
+
+    dataset = _CropDataset(imgs_dir, filenames, transform)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                             shuffle=False, num_workers=num_workers)
+
     with torch.no_grad():
-        for filename in tqdm(filenames, desc="Multi-task inference"):
-            image = Image.open(os.path.join(imgs_dir, filename)).convert('RGB')
-            image = transform(image).unsqueeze(0).to(device)
-            h1, h2, h3, h4 = model(image)
-            probs = torchF.softmax(h1, dim=1)[0]
-            pred_class = int(torch.argmax(probs).item())
-            pred_conf = float(probs[pred_class].item())
-            label = str(pred_class) if pred_class > 0 else "-1"
-            # confidence format: [prob, 1.0] so product(confidence[:-1]) = prob
-            results[filename] = {
-                'label': label,
-                'confidence': [pred_conf, 1.0],
-                'raw': probs.cpu().tolist(),
-                'logits': h1[0].cpu().tolist()
-            }
+        for batch_images, batch_indices in tqdm(dataloader, desc="Multi-task inference"):
+            batch_images = batch_images.to(device)
+            h1, h2, h3, h4 = model(batch_images)
+            probs = torchF.softmax(h1, dim=1)
+
+            for i in range(len(batch_indices)):
+                idx = batch_indices[i].item()
+                filename = filenames[idx]
+                img_probs = probs[i]
+                pred_class = int(torch.argmax(img_probs).item())
+                pred_conf = float(img_probs[pred_class].item())
+                label = str(pred_class) if pred_class > 0 else "-1"
+                results[filename] = {
+                    'label': label,
+                    'confidence': [pred_conf, 1.0],
+                    'raw': img_probs.cpu().tolist(),
+                    'logits': h1[i].cpu().tolist()
+                }
 
     with open(result_file, 'w') as f:
         json.dump(results, f)
@@ -387,7 +411,6 @@ def soccer_net_pipeline(args):
                 pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
                 pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
                 pose_script = os.path.join(_project_root, 'pose.py')
-                config.pose_python = sys.executable
                 success = _run_cmd([
                     config.pose_python, pose_script,
                     pose_config, pose_checkpoint,
@@ -434,7 +457,7 @@ def soccer_net_pipeline(args):
                 str_script = os.path.join(_project_root, 'str.py')
                 success = _run_cmd([
                     config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
-                    '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
+                    '--data_root', crops_dir, '--inference', '--result_file', str_result_file
                 ], cwd=_project_root)
             print("Done predict numbers")
 

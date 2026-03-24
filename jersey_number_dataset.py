@@ -110,6 +110,62 @@ class JerseyNumberMultitaskDataset(Dataset):
             image = self.transform(image)
         return image, label, digit1, digit2, digit_count
 
+
+class TrackletMultitaskDataset(Dataset):
+    """Loads jersey number images from tracklet directory structure with JSON ground truth.
+
+    Expected layout:
+        images_dir/<tracklet_id>/<tracklet_id>_N.jpg
+        gt_json: {tracklet_id: jersey_number}  (entries with label <= 0 are skipped)
+
+    If tracklet_ids is provided, only those tracklets are loaded (for train/val splitting).
+    """
+    def __init__(self, gt_json_path, images_dir, mode='train', tracklet_ids=None, max_per_tracklet=0):
+        self.transform = data_transforms[mode]['resnet']
+        with open(gt_json_path, 'r') as f:
+            gt: dict[str, int] = json.load(f)
+
+        # Filter to valid labels (1-99) and optional tracklet subset
+        valid_ids = set(tracklet_ids) if tracklet_ids else None
+        self.samples: list[tuple[str, int]] = []
+        for tid, label in gt.items():
+            if label <= 0 or label >= 100:
+                continue
+            if valid_ids and tid not in valid_ids:  # type: ignore[unsupported-operand]
+                continue
+            tracklet_dir = os.path.join(images_dir, str(tid))
+            if not os.path.isdir(tracklet_dir):
+                continue
+            imgs = [f for f in os.listdir(tracklet_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            if max_per_tracklet > 0 and len(imgs) > max_per_tracklet:
+                imgs = sorted(imgs)
+                # Sample evenly spaced images from the tracklet
+                step = len(imgs) / max_per_tracklet
+                imgs = [imgs[int(i * step)] for i in range(max_per_tracklet)]
+            for fname in imgs:
+                self.samples.append((os.path.join(tracklet_dir, fname), label))
+
+        unique_labels = set(l for _, l in self.samples)
+        print(f"TrackletMultitaskDataset [{mode}]: {len(self.samples)} images, {len(unique_labels)} unique labels")
+
+    def __len__(self):
+        return len(self.samples)
+
+    @staticmethod
+    def get_digit_labels(label):
+        if label < 10:
+            return label, 10, 0   # (digit, padding, single-digit)
+        else:
+            return label // 10, label % 10, 1   # (tens, units, double-digit)
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        image = Image.open(img_path).convert('RGB')
+        digit1, digit2, digit_count = self.get_digit_labels(label)
+        if self.transform:
+            image = self.transform(image)
+        return image, label, digit1, digit2, digit_count
+
 class UnlabelledJerseyNumberLegibilityDataset(Dataset):
     def __init__(self, image_paths, mode='test', arch='resnet18'):
         if 'resnet' in arch:

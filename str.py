@@ -86,27 +86,51 @@ def print_results_table(results: List[Result], file=None):
           f'| {c.confidence:>10.2f} | {c.label_length:>12.2f} |', file=file)
 
 
+class _InferenceDataset(torch.utils.data.Dataset):
+    """Minimal dataset for loading crop images for PARSeq inference."""
+    def __init__(self, imgs_dir, filenames, transform):
+        self.imgs_dir = imgs_dir
+        self.filenames = filenames
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, idx):
+        image = Image.open(os.path.join(self.imgs_dir, self.filenames[idx])).convert('RGB')
+        return self.transform(image), idx
+
 def run_inference(model, data_root, result_file, img_size):
-    # load images one by one, save paths and result
     file_dir = os.path.join(data_root, 'imgs')
-    filenames = os.listdir(file_dir)
-    filenames.sort()
+    filenames = sorted(os.listdir(file_dir))
     results = {}
-    for filename in tqdm(filenames):
-        image = Image.open(os.path.join(file_dir, filename)).convert('RGB')
-        transform = SceneTextDataModule.get_transform(img_size)
-        image = transform(image)
-        image = image.unsqueeze(0)
-        logits = model.forward(image.to(model.device))
-        #convert to 3 by 10
+
+    transform = SceneTextDataModule.get_transform(img_size)
+    batch_size = 32 if model.device.type in ('cuda', 'mps') else 1
+    num_workers = 0 if os.name == 'nt' else 4
+
+    dataset = _InferenceDataset(file_dir, filenames, transform)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                             shuffle=False, num_workers=num_workers)
+
+    for batch_images, batch_indices in tqdm(dataloader):
+        logits = model.forward(batch_images.to(model.device))
         probs_full = logits[:,:3,:11].softmax(-1)
         preds, probs = model.tokenizer.decode(probs_full)
-        logits = logits[:,:3,:11].cpu().detach().numpy()[0].tolist()
-        # probs = logits.softmax(-1)
-        # preds, probs = model.tokenizer.decode(probs)
-        probs_full = probs_full.cpu().detach().numpy()[0].tolist()
-        confidence = probs[0].cpu().detach().numpy().squeeze().tolist()
-        results[filename] = {'label':preds[0], 'confidence':confidence, 'raw': probs_full, 'logits':logits}
+        logits_np = logits[:,:3,:11].cpu().detach().numpy()
+        probs_full_np = probs_full.cpu().detach().numpy()
+
+        for i in range(len(batch_indices)):
+            idx = batch_indices[i].item()
+            filename = filenames[idx]
+            confidence = probs[i].cpu().detach().numpy().squeeze().tolist()
+            results[filename] = {
+                'label': preds[i],
+                'confidence': confidence,
+                'raw': probs_full_np[i].tolist(),
+                'logits': logits_np[i].tolist()
+            }
+
     with open(result_file, 'w') as f:
         json.dump(results, f)
 

@@ -96,16 +96,21 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
         # Enable AMP for CUDA and MPS
         use_amp = device in ('cuda', 'mps')
         autocast_device = device if use_amp else 'cpu'
-        
+        batch_size = 32 if device in ('cuda', 'mps') else 1
+
         with torch.inference_mode(), torch.amp.autocast(autocast_device, enabled=use_amp):
-            for img_path in images:
-                img = cv2.imread(os.path.join(track_path, img_path))
-                input_img = Image.fromarray(img)
-                input_img = torch.stack([val_transforms(input_img)])
-                input_img = input_img.to(device)
-                _, global_feat = model.backbone(input_img)
+            for batch_start in range(0, len(images), batch_size):
+                batch_paths = images[batch_start:batch_start + batch_size]
+                batch_tensors = []
+                for img_path in batch_paths:
+                    img = cv2.imread(os.path.join(track_path, img_path))
+                    input_img = Image.fromarray(img)
+                    batch_tensors.append(val_transforms(input_img))
+                batch_input = torch.stack(batch_tensors).to(device)
+                _, global_feat = model.backbone(batch_input)
                 global_feat = model.bn(global_feat)
-                features.append(global_feat.cpu().float().numpy().reshape(-1,))
+                for i in range(global_feat.size(0)):
+                    features.append(global_feat[i].cpu().float().numpy().reshape(-1,))
 
         np_feat = np.array(features)
         with open(output_file, 'wb') as f:
