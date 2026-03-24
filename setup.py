@@ -115,7 +115,12 @@ def setup_pose(root):
 
         os.chdir(os.path.join(root, rep_path, "ViTPose"))
         os.system(f"conda run --live-stream -n {env_name} pip install -v -e .")
-        os.system(f"conda run --live-stream -n {env_name} pip install timm==0.4.9 einops")
+        os.system(f"conda run --live-stream -n {env_name} pip install timm==0.4.9 einops addict")
+
+    os.chdir(root)
+    # mmcv 1.4.x imports addict; ensure present for envs created before this dependency was listed
+    if env_name in get_conda_envs():
+        os.system(f"conda run --live-stream -n {env_name} pip install -q addict")
 
 
 # clone and install str
