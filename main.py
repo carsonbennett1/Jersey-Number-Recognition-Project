@@ -301,7 +301,7 @@ def soccer_net_pipeline(args):
         else:
             print("Classifying Legibility:")
             try:
-                legible_dict, illegible_tracklets = get_soccer_net_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
+                legible_dict, illegible_tracklets = get_soccer_net_raw_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
             except Exception as error:
                 print(f'Failed to run legibility classifier:{error}')
                 success = False
