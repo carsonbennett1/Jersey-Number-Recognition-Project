@@ -165,3 +165,8 @@ out/
 
 # excess files
 personal-docs/
+
+.claude/
+CLAUDE.md
+*.yml
+number-rec/

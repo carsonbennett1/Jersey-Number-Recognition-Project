@@ -344,12 +344,19 @@ def soccer_net_pipeline(args):
                 pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
                 pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
                 pose_script = os.path.join(_project_root, 'pose.py')
-                config.pose_python = sys.executable
-                success = _run_cmd([
-                    config.pose_python, pose_script,
-                    pose_config, pose_checkpoint,
-                    '--img-root', '/', '--json-file', input_json, '--out-json', output_json
-                ], cwd=_project_root)
+                pose_py = config.pose_python
+                if not os.path.isfile(pose_py):
+                    print(
+                        f"ERROR: Pose interpreter not found: {pose_py}\n"
+                        f"Create the '{config.pose_env}' conda environment (mmcv + ViTPose + addict), e.g. run: python setup.py"
+                    )
+                    success = False
+                else:
+                    success = _run_cmd([
+                        pose_py, pose_script,
+                        pose_config, pose_checkpoint,
+                        '--img-root', '/', '--json-file', input_json, '--out-json', output_json
+                    ], cwd=_project_root)
                 print("Done detecting pose")
 
 

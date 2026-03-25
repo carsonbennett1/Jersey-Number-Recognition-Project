@@ -31,8 +31,17 @@ def _get_python_path(env_name):
         return os.path.join(_conda_base, env_name, _python_bin_dir, _python_exe)
 
 pose_home = os.path.join(_main_repo, 'pose/ViTPose')
+# Prefer vitpose2 (current setup.py); fall back to vitpose for older installs
+_pose_env_candidates = ('vitpose2', 'vitpose')
 pose_env = 'vitpose2'
 pose_python = _get_python_path(pose_env)
+if not os.path.isfile(pose_python):
+    for _alt in _pose_env_candidates[1:]:
+        _p = _get_python_path(_alt)
+        if os.path.isfile(_p):
+            pose_env = _alt
+            pose_python = _p
+            break
 
 str_home = os.path.join(_main_repo, 'str/parseq/')
 str_env = 'parseq2'
