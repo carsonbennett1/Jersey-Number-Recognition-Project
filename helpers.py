@@ -425,14 +425,18 @@ def predict_jersey_number(image_predictions, useBias=False):
 
     return batch_tokens, batch_probs
 
-def candidate_and_frame_processing(confidence_values, L, e, qt):
+def candidate_and_frame_processing(confidence_values, tracklet):
+    L = 4
+    e = 1e-9
+    qt = np.array(tracklet)
+
     columns = confidence_values.shape[1]
     all_score_k_values = []
-    
+
     for i in range(columns):
         frame_values = []  # contain scores
         for j in range(len(confidence_values)):
-            vt_k = qt * (np.log(confidence_values[j][i]) + e)
+            vt_k = qt[j] * (np.log(confidence_values[j][i]) + e)
             frame_values.append(vt_k)
         
         s_k = np.argsort(frame_values)
@@ -448,18 +452,12 @@ def candidate_and_frame_processing(confidence_values, L, e, qt):
     k_hat = np.argmax(all_score_k_values)
     return k_hat
 
-def predict_jersey_number_top_L(image_predictions, bias=False):
+def predict_jersey_number_top_L(image_predictions, tracklet, bias=False):
     tens_priors, unit_priors = initialize_priors(bias)
     tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
 
-    L = 4
-    e = 1e-9
-
-    # legibility_results = config.dataset['SoccerNet']['working_dir']['raw_legible_result']
-    qt = 1  # Change eventually
-
-    tens_scores = candidate_and_frame_processing(tens_likelihood, L, e, qt)
-    unit_scores = candidate_and_frame_processing(unit_likelihood, L, e, qt)
+    tens_scores = candidate_and_frame_processing(tens_likelihood, tracklet)
+    unit_scores = candidate_and_frame_processing(unit_likelihood, tracklet)
 
     batch_tokens = token_list[tens_scores] + token_list[unit_scores]
     batch_probs = [tens_scores, unit_scores]
@@ -472,6 +470,15 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     return batch_tokens, batch_probs
 
 def process_jersey_id_predictions_top_L(file_path, useBias = False):
+    legibility_tracklet = None
+    try:
+        with open("./out/SoccerNetResults/raw_legible_result.json") as legibility_file: # file location main change on initial pipeline run
+            data = json.load(legibility_file)
+
+    except FileNotFoundError:
+        print("Raw legibility results file could not be found")
+        return
+
     all_results = {}
     final_results = {}
     with open(file_path, 'r') as f:
@@ -494,7 +501,13 @@ def process_jersey_id_predictions_top_L(file_path, useBias = False):
             continue
         results = np.array(all_results[tracklet])
 
-        best_prediction, probs = predict_jersey_number_top_L(results, bias=useBias)
+        try:
+            legibility_tracklet = data[tracklet]  # get exact tracklet name
+        except:
+            print(f"Couldin't find tracklet name in JSON raw legibility for {tracklet}")
+            continue
+
+        best_prediction, probs = predict_jersey_number_top_L(results, legibility_tracklet, bias=useBias)
 
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
