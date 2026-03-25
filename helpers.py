@@ -458,9 +458,6 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     # legibility_results = config.dataset['SoccerNet']['working_dir']['raw_legible_result']
     qt = 1  # Change eventually
 
-    # Need to do this twice
-    # Tens digit gets 0-9 prediction for jersey number 0?
-    # unit digit gets 0-9 prediction for jerysey number ?0
     tens_scores = candidate_and_frame_processing(tens_likelihood, L, e, qt)
     unit_scores = candidate_and_frame_processing(unit_likelihood, L, e, qt)
 
@@ -486,9 +483,8 @@ def process_jersey_id_predictions_top_L(file_path, useBias = False):
         if tracklet not in all_results:
             all_results[tracklet] = []
             final_results[tracklet] = -1  # default
-        else:
-            raw_result = results_dict[name]['logits']
-            raw_result = apply_ts(raw_result)
+        raw_result = results_dict[name]['logits']
+        raw_result = apply_ts(raw_result)
 
         all_results[tracklet].append(raw_result)
 
@@ -498,7 +494,7 @@ def process_jersey_id_predictions_top_L(file_path, useBias = False):
             continue
         results = np.array(all_results[tracklet])
 
-        best_prediction, probs = predict_jersey_number_top_L(results, useBias=useBias)
+        best_prediction, probs = predict_jersey_number_top_L(results, bias=useBias)
 
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
