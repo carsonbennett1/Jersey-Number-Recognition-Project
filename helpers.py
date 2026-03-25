@@ -37,6 +37,34 @@ WIDTH_MIN = 30
 
 bias_for_digits = [0.06, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094]
 
+def load_raw_legibility_scores(json_path):
+    """
+    Load raw per-frame legibility scores.
+
+    Returns:
+        {
+            "1209": [0.91, 0.84, 0.20, 0.76],
+            "1210": [0.11, 0.33, 0.95]
+        }
+    """
+    path = Path(json_path)
+
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object in {path}, got {type(data).__name__}")
+
+    out = {}
+    for track_id, scores in data.items():
+        if not isinstance(scores, list):
+            raise ValueError(
+                f"Track {track_id!r}: expected list of scores, got {type(scores).__name__}"
+            )
+        out[str(track_id)] = [float(x) for x in scores]
+
+    return out
+
 # Generate image JSON COCO format for ViTPose to consume
 def generate_json(file_names, json_file_path):
     img_id = 0
@@ -571,6 +599,97 @@ def process_jersey_id_predictions(file_path, useBias=False):
         #best_prediction, all_unique, weights = find_best_prediction_with_vector(results)
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label':  str(int(best_prediction)), 'unique': all_unique, 'weights':weights}
+
+    return final_results, final_full_results
+
+
+def process_jersey_id_predictions_top_L(file_path, raw_legibility_path=None, L=3, epsilon=1e-8):
+    """
+    Simple Top-L version:
+    - each frame only supports its predicted label
+    - frame score = q_t * log(frame_confidence + epsilon)
+    - for each candidate number, keep top L supporting frames
+    - choose the candidate with the highest summed score
+    """
+    with open(file_path, "r") as f:
+        results_dict = json.load(f)
+
+    legibility_by_track = None
+    if raw_legibility_path is not None:
+        legibility_by_track = load_raw_legibility_scores(raw_legibility_path)
+
+    by_track = {}
+
+    for image_name, entry in results_dict.items():
+        label = entry.get("label")
+
+        if not is_valid_number(label):
+            continue
+
+        tracklet = image_name.split("_")[0]
+        confidence = entry.get("confidence", [])
+
+        total_prob = 1.0
+        for x in confidence[:-1]:
+            total_prob *= float(x)
+
+        if tracklet not in by_track:
+            by_track[tracklet] = []
+
+        by_track[tracklet].append({
+            "name": image_name,
+            "pred_k": int(label),
+            "score": float(total_prob),
+        })
+
+    final_results = {}
+    final_full_results = {}
+
+    for tracklet, frames in by_track.items():
+        if not frames:
+            final_results[tracklet] = -1
+            continue
+
+        frames = sorted(frames, key=lambda x: x["name"])
+
+        q_list = [1.0] * len(frames)
+        if legibility_by_track is not None and tracklet in legibility_by_track:
+            raw_q = legibility_by_track[tracklet]
+            for i in range(min(len(raw_q), len(frames))):
+                q_list[i] = float(raw_q[i])
+
+        candidates = sorted(set(frame["pred_k"] for frame in frames))
+        scores_by_k = {}
+
+        for k in candidates:
+            v_vals = []
+
+            for i, frame in enumerate(frames):
+                q_t = q_list[i]
+
+                if frame["pred_k"] == k:
+                    p_tk = frame["score"]
+                else:
+                    p_tk = 0.0
+
+                v_tk = q_t * np.log(p_tk + epsilon)
+                v_vals.append(v_tk)
+
+            v_vals.sort(reverse=True)
+            top_vals = v_vals[:min(L, len(v_vals))]
+            scores_by_k[k] = float(sum(top_vals))
+
+        best_k = max(scores_by_k, key=scores_by_k.get)
+
+        candidate_list = [int(k) for k in candidates]
+        weights = [float(scores_by_k[k]) for k in candidate_list]
+
+        final_results[tracklet] = str(best_k)
+        final_full_results[tracklet] = {
+            "label": str(best_k),
+            "unique": candidate_list,
+            "weights": weights,
+        }
 
     return final_results, final_full_results
 

@@ -397,7 +397,27 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
+            part_cfg = config.dataset['SoccerNet'][args.part]
+            raw_legibility_path = None
+            raw_key = part_cfg.get('raw_legible_result')
+            if raw_key:
+                _raw_path = os.path.join(config.dataset['SoccerNet']['working_dir'], raw_key)
+                if os.path.isfile(_raw_path):
+                    raw_legibility_path = _raw_path
+                else:
+                    print(
+                        f"Top-L combine: raw legibility not found at {_raw_path}, "
+                        "using q_t=1 for all frames"
+                    ) 
+
+            # results_dict, analysis_results = helpers.process_jersey_id_predictions(
+            #     str_result_file, useBias=True
+            # )
+            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_l(
+                str_result_file,
+                raw_legibility_path=raw_legibility_path,
+                L=3,
+            )
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 
