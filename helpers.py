@@ -603,7 +603,7 @@ def process_jersey_id_predictions(file_path, useBias=False):
     return final_results, final_full_results
 
 
-def process_jersey_id_predictions_top_L(file_path, raw_legibility_path=None, L=3, epsilon=1e-8):
+def process_jersey_id_predictions_top_l(file_path, raw_legibility_path=None, L=55, epsilon=1e-8):
     """
     Simple Top-L version:
     - each frame only supports its predicted label
@@ -612,17 +612,17 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path=None, L=3
     - choose the candidate with the highest summed score
     """
     with open(file_path, "r") as f:
-        results_dict = json.load(f)
+        results_dict = json.load(f) # predictions for each frame
 
     legibility_by_track = None
     if raw_legibility_path is not None:
-        legibility_by_track = load_raw_legibility_scores(raw_legibility_path)
+        legibility_by_track = load_raw_legibility_scores(raw_legibility_path) # raw legibility scores for each frame
 
-    by_track = {}
+    by_track = {} 
 
-    for image_name, entry in results_dict.items():
+    for image_name, entry in results_dict.items(): 
+
         label = entry.get("label")
-
         if not is_valid_number(label):
             continue
 
@@ -632,11 +632,11 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path=None, L=3
         total_prob = 1.0
         for x in confidence[:-1]:
             total_prob *= float(x)
-
-        if tracklet not in by_track:
+        
+        if tracklet not in by_track: # first time seeing this tracklet 
             by_track[tracklet] = []
 
-        by_track[tracklet].append({
+        by_track[tracklet].append({ 
             "name": image_name,
             "pred_k": int(label),
             "score": float(total_prob),
