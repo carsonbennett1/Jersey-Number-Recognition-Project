@@ -425,8 +425,8 @@ def predict_jersey_number(image_predictions, useBias=False):
 
     return batch_tokens, batch_probs
 
-def candicate_and_frame_processing(confidence_values, L, e, qt):
-    columns = confidence_values.shape[1]   # Should be size 11 here, 0-9 = 10 + 1 for E (End token)
+def candidate_and_frame_processing(confidence_values, L, e, qt):
+    columns = confidence_values.shape[1]
     all_score_k_values = []
     
     for i in range(columns):
@@ -461,8 +461,8 @@ def predict_jersey_number_top_L(image_predictions, bias=False):
     # Need to do this twice
     # Tens digit gets 0-9 prediction for jersey number 0?
     # unit digit gets 0-9 prediction for jerysey number ?0
-    tens_scores = candicate_and_frame_processing(tens_likelihood, L, e, qt)
-    unit_scores = candicate_and_frame_processing(unit_likelihood, L, e, qt)
+    tens_scores = candidate_and_frame_processing(tens_likelihood, L, e, qt)
+    unit_scores = candidate_and_frame_processing(unit_likelihood, L, e, qt)
 
     batch_tokens = token_list[tens_scores] + token_list[unit_scores]
     batch_probs = [tens_scores, unit_scores]
