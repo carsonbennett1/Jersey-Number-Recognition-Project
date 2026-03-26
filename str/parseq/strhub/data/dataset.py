@@ -36,13 +36,23 @@ def build_tree_dataset(root: Union[PurePath, str], *args, **kwargs):
     root = Path(root).absolute()
     log.info(f'dataset root:\t{root}')
     datasets = []
-    for mdb in glob.glob(str(root / '**/data.mdb'), recursive=True):
+    for mdb in sorted(glob.glob(str(root / '**/data.mdb'), recursive=True)):
         mdb = Path(mdb)
         ds_name = str(mdb.parent.relative_to(root))
         ds_root = str(mdb.parent.absolute())
         dataset = LmdbDataset(ds_root, *args, **kwargs)
-        log.info(f'\tlmdb:\t{ds_name}\tnum samples: {len(dataset)}')
+        n = len(dataset)
+        if n == 0:
+            log.warning(f'\tlmdb:\t{ds_name}\tskipped (0 samples after charset/length filter)')
+            continue
+        log.info(f'\tlmdb:\t{ds_name}\tnum samples: {n}')
         datasets.append(dataset)
+    if not datasets:
+        raise FileNotFoundError(
+            f'No usable LMDB under {root}: need **/data.mdb with at least one sample after filtering '
+            f'(max_label_len, charset). For SoccerNet jersey crops, extract the STR LMDB so it lives under '
+            f'{{root_dir}}/train/real/ or {{root_dir}}/train/ — see project README.'
+        )
     return ConcatDataset(datasets)
 
 

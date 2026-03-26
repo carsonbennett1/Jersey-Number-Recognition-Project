@@ -1,0 +1,8 @@
+# @package _global_
+# PARSeq + encoder auxiliary losses (full number, tens, units, digit-count) for jersey STR.
+# Inference still uses standard PARSeq decoder + tokenizer (same as baseline).
+defaults:
+  - override /model: parseq
+
+model:
+  use_jersey_aux_heads: true

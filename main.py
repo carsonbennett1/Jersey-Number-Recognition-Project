@@ -132,7 +132,7 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
     with open(full_legibile_path, "w") as outfile:
         outfile.write(json_object)
 
-    full_illegibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config. dataset['SoccerNet'][args.part]['illegible_result'])
+    full_illegibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['illegible_result'])
     json_object = json.dumps({'illegible': illegible_tracklets}, indent=4)
     with open(full_illegibile_path, "w") as outfile:
         outfile.write(json_object)
@@ -246,18 +246,50 @@ def run_multitask_inference(crops_dir, result_file, model_path):
     print(f"Multi-task inference complete: {len(results)} predictions saved")
     return True
 
+def _parseq_training_lmdb_ready(data_root: str) -> bool:
+    """PARSeq expects **/data.mdb under train/real or train (case variants for splits)."""
+    root = Path(data_root)
+    if not root.is_dir():
+        return False
+    for rel in ('train/real', 'train', 'Train/real', 'Train'):
+        p = root / rel
+        if p.is_dir() and any(p.rglob('data.mdb')):
+            return True
+    return False
+
+
 def train_parseq(args):
     parseq_dir = config.str_home
     current_dir = os.getcwd()
+    experiment = 'parseq-jersey-aux' if getattr(args, 'jersey_aux_str', False) else 'parseq'
+    print(f"PARSeq Hydra experiment: {experiment}")
     if args.dataset == 'Hockey':
         print("Train PARSeq for Hockey")
-        data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
     else:
         print("Train PARSeq for Soccer")
+    env_lm = os.environ.get('JERSEY_STR_LMDB_ROOT', '').strip()
+    if env_lm:
+        data_root = str(Path(env_lm).resolve() if os.path.isabs(env_lm) else (Path(current_dir) / env_lm).resolve())
+        print(f"Using JERSEY_STR_LMDB_ROOT -> {data_root}")
+    elif args.dataset == 'Hockey':
+        data_root = os.path.join(current_dir, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
+    else:
         data_root = os.path.join(current_dir, config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet']['numbers_data'])
+    if not _parseq_training_lmdb_ready(data_root):
+        print('\n' + '=' * 72)
+        if args.dataset == 'SoccerNet':
+            print('PARSeq STR training needs a separate SoccerNet jersey-number LMDB (cropped digits).')
+            print('The main jersey-2023 image folders are not enough — you must download the LMDB pack.')
+            print('README → Data → "Weakly-labelled jersey number crops ... LMDB" (Google Drive).')
+        else:
+            print('PARSeq STR training needs the Hockey jersey-numbers LMDB under your data/Hockey tree.')
+        print(f'Expected: `data.mdb` under train/ or train/real/ inside:\n  {data_root}')
+        print('If the LMDB lives elsewhere, set JERSEY_STR_LMDB_ROOT to that folder (absolute or relative to cwd).')
+        print('=' * 72 + '\n')
+        return
     success = _run_cmd([
         config.str_python, 'train.py',
-        '+experiment=parseq', 'dataset=real', f'data.root_dir={data_root}',
+        f'+experiment={experiment}', 'dataset=real', f'data.root_dir={data_root}',
         'trainer.max_epochs=25', 'pretrained=parseq', 'trainer.devices=1',
         'trainer.val_check_interval=1', 'data.batch_size=128', 'data.max_label_length=2'
     ], cwd=parseq_dir)
@@ -302,6 +334,10 @@ def soccer_net_pipeline(args):
     Path(config.dataset['SoccerNet']['working_dir']).mkdir(parents=True, exist_ok=True)
     success = True
     _project_root = os.path.dirname(os.path.abspath(__file__))
+    if getattr(config, 'pipeline_output_slug', ''):
+        print(f"Isolated pipeline output (branch run): {config.dataset['SoccerNet']['working_dir']}")
+    else:
+        print(f"Pipeline output directory: {config.dataset['SoccerNet']['working_dir']}")
 
     image_dir = os.path.join(config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet'][args.part]['images'])
     soccer_ball_list = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -494,6 +530,8 @@ if __name__ == '__main__':
     parser.add_argument('dataset', help="Options: 'SoccerNet', 'Hockey'")
     parser.add_argument('part', help="Options: 'test', 'val', 'train', 'challenge")
     parser.add_argument('--train_str', action='store_true', default=False, help="Run training of jersey number recognition")
+    parser.add_argument('--jersey_aux_str', action='store_true', default=False,
+                        help="With --train_str: enable PARSeq encoder multi-task aux loss (parseq-jersey-aux); inference still PARSeq decode")
     args = parser.parse_args()
 
     if not args.train_str:
@@ -508,8 +546,8 @@ if __name__ == '__main__':
                        "str": True,
                        "combine": True,
                        "eval": True,
-                       "use_multitask_classifier": True,  # set True for Approach 1
-                       "multitask_model_path": "experiments/multitask_resnet34.pth"}
+                       "use_multitask_classifier": False,
+                       "multitask_model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "experiments", "multitask_resnet34.pth")}
             args.pipeline = actions
             soccer_net_pipeline(args)
         elif args.dataset == 'Hockey':

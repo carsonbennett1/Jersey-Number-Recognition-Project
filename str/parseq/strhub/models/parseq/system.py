@@ -16,7 +16,7 @@
 import math
 from functools import partial
 from itertools import permutations
-from typing import Sequence, Any, Optional
+from typing import Sequence, Any, Optional, List, Tuple
 
 import numpy as np
 import torch
@@ -40,13 +40,25 @@ class PARSeq(CrossEntropySystem):
                  enc_num_heads: int, enc_mlp_ratio: int, enc_depth: int,
                  dec_num_heads: int, dec_mlp_ratio: int, dec_depth: int,
                  perm_num: int, perm_forward: bool, perm_mirrored: bool,
-                 decode_ar: bool, refine_iters: int, dropout: float, **kwargs: Any) -> None:
+                 decode_ar: bool, refine_iters: int, dropout: float,
+                 use_jersey_aux_heads: bool = False,
+                 aux_alpha_full: float = 0.25,
+                 aux_alpha_tens: float = 0.15,
+                 aux_alpha_units: float = 0.15,
+                 aux_alpha_count: float = 0.2,
+                 **kwargs: Any) -> None:
         super().__init__(charset_train, charset_test, batch_size, lr, warmup_pct, weight_decay)
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['kwargs'])
 
         self.max_label_length = max_label_length
         self.decode_ar = decode_ar
         self.refine_iters = refine_iters
+
+        self.use_jersey_aux_heads = use_jersey_aux_heads
+        self.aux_alpha_full = aux_alpha_full
+        self.aux_alpha_tens = aux_alpha_tens
+        self.aux_alpha_units = aux_alpha_units
+        self.aux_alpha_count = aux_alpha_count
 
         self.encoder = Encoder(img_size, patch_size, embed_dim=embed_dim, depth=enc_depth, num_heads=enc_num_heads,
                                mlp_ratio=enc_mlp_ratio)
@@ -66,6 +78,16 @@ class PARSeq(CrossEntropySystem):
         # +1 for <eos>
         self.pos_queries = nn.Parameter(torch.Tensor(1, max_label_length + 1, embed_dim))
         self.dropout = nn.Dropout(p=dropout)
+
+        # Encoder-level multi-task heads (jersey 0–99): same convention as JerseyNumberMultitaskDataset
+        if self.use_jersey_aux_heads:
+            self.aux_head_full = nn.Linear(embed_dim, 100)
+            self.aux_head_tens = nn.Linear(embed_dim, 10)
+            self.aux_head_units = nn.Linear(embed_dim, 11)
+            self.aux_head_count = nn.Linear(embed_dim, 2)
+        else:
+            self.aux_head_full = self.aux_head_tens = self.aux_head_units = self.aux_head_count = None
+
         # Encoder has its own init.
         named_apply(partial(init_weights, exclude=['encoder']), self)
         nn.init.trunc_normal_(self.pos_queries, std=.02)
@@ -78,6 +100,47 @@ class PARSeq(CrossEntropySystem):
 
     def encode(self, img: torch.Tensor):
         return self.encoder(img)
+
+    @staticmethod
+    def _jersey_multitask_targets(labels: List[str], device: torch.device) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Digit targets aligned with number_classifier.JerseyNumberMultitaskDataset.get_digit_labels."""
+        n = len(labels)
+        full = torch.zeros(n, dtype=torch.long, device=device)
+        tens = torch.zeros(n, dtype=torch.long, device=device)
+        units = torch.zeros(n, dtype=torch.long, device=device)
+        count = torch.zeros(n, dtype=torch.long, device=device)
+        valid = torch.zeros(n, dtype=torch.bool, device=device)
+        for i, raw in enumerate(labels):
+            s = str(raw).strip()
+            if not s.isdigit():
+                continue
+            v = int(s)
+            if v < 0 or v > 99:
+                continue
+            valid[i] = True
+            full[i] = v
+            if v < 10:
+                tens[i] = v
+                units[i] = 10
+                count[i] = 0
+            else:
+                tens[i] = v // 10
+                units[i] = v % 10
+                count[i] = 1
+        return full, tens, units, count, valid
+
+    def _jersey_aux_loss(self, memory: Tensor, labels: List[str]) -> Tensor:
+        """Mean auxiliary CE over batch items with numeric 0–99 labels only."""
+        pooled = memory.mean(dim=1)
+        tgt_f, tgt_t, tgt_u, tgt_c, valid = self._jersey_multitask_targets(labels, memory.device)
+        if not valid.any():
+            return pooled.new_tensor(0.0)
+        lf = F.cross_entropy(self.aux_head_full(pooled[valid]), tgt_f[valid])
+        lt = F.cross_entropy(self.aux_head_tens(pooled[valid]), tgt_t[valid])
+        lu = F.cross_entropy(self.aux_head_units(pooled[valid]), tgt_u[valid])
+        lc = F.cross_entropy(self.aux_head_count(pooled[valid]), tgt_c[valid])
+        return (self.aux_alpha_full * lf + self.aux_alpha_tens * lt
+                + self.aux_alpha_units * lu + self.aux_alpha_count * lc)
 
     def decode(self, tgt: torch.Tensor, memory: torch.Tensor, tgt_mask: Optional[Tensor] = None,
                tgt_padding_mask: Optional[Tensor] = None, tgt_query: Optional[Tensor] = None,
@@ -254,6 +317,12 @@ class PARSeq(CrossEntropySystem):
                 tgt_out = torch.where(tgt_out == self.eos_id, self.pad_id, tgt_out)
                 n = (tgt_out != self.pad_id).sum().item()
         loss /= loss_numel
+
+        if self.use_jersey_aux_heads:
+            loss_aux = self._jersey_aux_loss(memory, labels)
+            self.log('loss_parseq', loss, prog_bar=False)
+            self.log('loss_jersey_aux', loss_aux, prog_bar=False)
+            loss = loss + loss_aux
 
         self.log('loss', loss)
         return loss

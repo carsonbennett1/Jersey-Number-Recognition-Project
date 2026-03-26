@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Optional, Callable, Sequence, Tuple
 
 import pytorch_lightning as pl
@@ -66,24 +66,86 @@ class SceneTextDataModule(pl.LightningDataModule):
         ])
         return T.Compose(transforms)
 
+    def _train_root_candidates(self) -> Sequence[PurePath]:
+        """PARSeq default is train/real/; SoccerNet jersey LMDBs often use train/ only (no real/)."""
+        r = Path(self.root_dir)
+        cands = [
+            r / 'train' / self.train_dir,
+            r / 'train',
+            r / 'Train' / self.train_dir,
+            r / 'Train',
+        ]
+        seen: set[str] = set()
+        out: list[PurePath] = []
+        for p in cands:
+            key = str(p.resolve())
+            if key not in seen:
+                seen.add(key)
+                out.append(PurePath(p))
+        return out
+
+    def _val_root_candidates(self) -> Sequence[PurePath]:
+        r = Path(self.root_dir)
+        cands = [
+            r / 'val', r / 'val' / self.train_dir,
+            r / 'Val', r / 'Val' / self.train_dir,
+        ]
+        seen: set[str] = set()
+        out: list[PurePath] = []
+        for p in cands:
+            key = str(p.resolve())
+            if key not in seen:
+                seen.add(key)
+                out.append(PurePath(p))
+        return out
+
     @property
     def train_dataset(self):
         if self._train_dataset is None:
             transform = self.get_transform(self.img_size, self.augment)
-            root = PurePath(self.root_dir, 'train', self.train_dir)
-            self._train_dataset = build_tree_dataset(root, self.charset_train, self.max_label_length,
-                                                     self.min_image_dim, self.remove_whitespace, self.normalize_unicode,
-                                                     transform=transform)
+            last_err: Optional[Exception] = None
+            for root in self._train_root_candidates():
+                if not Path(root).is_dir():
+                    continue
+                try:
+                    self._train_dataset = build_tree_dataset(
+                        root, self.charset_train, self.max_label_length,
+                        self.min_image_dim, self.remove_whitespace, self.normalize_unicode,
+                        transform=transform)
+                    break
+                except FileNotFoundError as e:
+                    last_err = e
+            if self._train_dataset is None:
+                tried = ', '.join(str(p) for p in self._train_root_candidates())
+                raise FileNotFoundError(
+                    f'No training LMDB found under {self.root_dir}. Tried: {tried}. '
+                    'Download the jersey STR LMDB from the project README; or set JERSEY_STR_LMDB_ROOT. '
+                    f'Need **/data.mdb under train/ or Train/ (optional "{self.train_dir}/" subfolder).'
+                ) from last_err
         return self._train_dataset
 
     @property
     def val_dataset(self):
         if self._val_dataset is None:
             transform = self.get_transform(self.img_size)
-            root = PurePath(self.root_dir, 'val')
-            self._val_dataset = build_tree_dataset(root, self.charset_test, self.max_label_length,
-                                                   self.min_image_dim, self.remove_whitespace, self.normalize_unicode,
-                                                   transform=transform)
+            last_err: Optional[Exception] = None
+            for root in self._val_root_candidates():
+                if not Path(root).is_dir():
+                    continue
+                try:
+                    self._val_dataset = build_tree_dataset(
+                        root, self.charset_test, self.max_label_length,
+                        self.min_image_dim, self.remove_whitespace, self.normalize_unicode,
+                        transform=transform)
+                    break
+                except FileNotFoundError as e:
+                    last_err = e
+            if self._val_dataset is None:
+                tried = ', '.join(str(p) for p in self._val_root_candidates())
+                raise FileNotFoundError(
+                    f'No validation LMDB under {self.root_dir}. Tried: {tried}. '
+                    'Ensure val/**/data.mdb exists (same archive layout as training).'
+                ) from last_err
         return self._val_dataset
 
     def train_dataloader(self):

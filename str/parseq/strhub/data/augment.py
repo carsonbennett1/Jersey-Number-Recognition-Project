@@ -15,8 +15,17 @@
 
 from functools import partial
 
-import imgaug.augmenters as iaa
 import numpy as np
+
+# NumPy 2.0 removed np.sctypes; imgaug 0.4.x expects it when loading imgaug.imgaug.
+if not hasattr(np, "sctypes"):
+    np.sctypes = {  # type: ignore[attr-defined]
+        "int": [np.int8, np.int16, np.int32, np.int64],
+        "uint": [np.uint8, np.uint16, np.uint32, np.uint64],
+        "float": [np.float16, np.float32, np.float64, np.longdouble],
+    }
+
+import imgaug.augmenters as iaa
 from PIL import ImageFilter, Image
 from timm.data import auto_augment
 

@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 # Detect the project root - derive from this file's location
 _main_repo = os.environ.get('JERSEY_PROJECT_ROOT')
@@ -35,7 +36,10 @@ pose_env = 'vitpose2'
 pose_python = _get_python_path(pose_env)
 
 str_home = os.path.join(_main_repo, 'str/parseq/')
-str_env = 'parseq2'
+# STR train/inference run in a subprocess; default to jersey if that is your main env.
+# Install: pip install -r str/parseq/requirements/train.txt (plus PyTorch for your CUDA).
+# Override: JERSEY_STR_ENV=parseq2
+str_env = os.environ.get('JERSEY_STR_ENV', 'jersey')
 str_python = _get_python_path(str_env)
 str_platform = 'cu113'
 
@@ -49,13 +53,85 @@ reid_script_path = os.path.join(_main_repo, 'centroid_reid.py')
 reid_home = os.path.join(_main_repo, 'reid/')
 
 
+def _sanitize_pipeline_slug(name):
+    bad = '\\/:*?"<>|'
+    s = ''.join(c if c not in bad and 32 <= ord(c) < 127 else '_' for c in name)
+    return (s[:80] or 'run')
+
+
+def _resolve_pipeline_output_slug():
+    """Subfolder under out/pipeline_runs/<slug>/ for SoccerNet pipeline outputs (empty = legacy out/SoccerNetResults).
+
+    Override with JERSEY_PIPELINE_OUTPUT_SLUG=my-run
+    Force shared default path with JERSEY_USE_SHARED_PIPELINE_OUTPUT=1
+    """
+    if os.environ.get('JERSEY_USE_SHARED_PIPELINE_OUTPUT', '').strip().lower() in ('1', 'true', 'yes'):
+        return ''
+    forced = os.environ.get('JERSEY_PIPELINE_OUTPUT_SLUG', '').strip()
+    if forced:
+        return _sanitize_pipeline_slug(forced)
+    try:
+        r = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=_main_repo,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if r.returncode != 0:
+            return ''
+        b = (r.stdout or '').strip()
+        if not b or b.lower() in ('main', 'master'):
+            return ''
+        if b == 'HEAD':
+            r2 = subprocess.run(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                cwd=_main_repo,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            sha = (r2.stdout or '').strip() or 'unknown'
+            return _sanitize_pipeline_slug(f'detached-{sha}')
+        return _sanitize_pipeline_slug(b)
+    except (OSError, subprocess.TimeoutExpired):
+        return ''
+
+
+pipeline_output_slug = _resolve_pipeline_output_slug()
+_soccer_net_working_dir = (
+    os.path.join(_main_repo, 'out', 'pipeline_runs', pipeline_output_slug, 'SoccerNetResults')
+    if pipeline_output_slug
+    else os.path.join(_main_repo, 'out', 'SoccerNetResults')
+)
+
+
+def _resolve_soccer_net_str_model(default_path: str) -> str:
+    """PARSeq inference .ckpt; override with JERSEY_SOCCERNET_STR_CKPT or JERSEY_STR_MODEL (absolute or relative to repo root)."""
+    for key in ('JERSEY_SOCCERNET_STR_CKPT', 'JERSEY_STR_MODEL'):
+        v = os.environ.get(key, '').strip()
+        if not v:
+            continue
+        if os.path.isabs(v):
+            return os.path.normpath(v)
+        return os.path.normpath(os.path.join(_main_repo, v))
+    return default_path
+
+
+# Best val_accuracy from top-k checkpoints (not last.ckpt); run folder: parseq/2026-03-25_21-32-45
+_DEFAULT_SOCCERNET_STR_MODEL = os.path.join(
+    _main_repo,
+    'str/parseq/outputs/parseq/2026-03-25_21-32-45/checkpoints/'
+    'epoch=15-step=1648-val_accuracy=95.6731-val_NED=96.5316.ckpt',
+)
+
 dataset = {'SoccerNet':
                 {'root_dir': os.path.join(_main_repo, 'data/SoccerNet/jersey-2023'),
-                 'working_dir': os.path.join(_main_repo, 'out/SoccerNetResults'),
+                 'working_dir': _soccer_net_working_dir,
                  'test': {
                         'images': 'test/test/images',
                         'gt': 'test/test/test_gt.json',
-                        'feature_output_folder': os.path.join(_main_repo, 'out/SoccerNetResults/test'),
+                        'feature_output_folder': os.path.join(_soccer_net_working_dir, 'test'),
                         'illegible_result': 'illegible.json',
                         'soccer_ball_list': 'soccer_ball.json',
                         'sim_filtered': 'test/main_subject_0.4.json',
@@ -71,7 +147,7 @@ dataset = {'SoccerNet':
                  'val': {
                         'images': 'val/val/images',
                         'gt': 'val/val/val_gt.json',
-                        'feature_output_folder': os.path.join(_main_repo, 'out/SoccerNetResults/val'),
+                        'feature_output_folder': os.path.join(_soccer_net_working_dir, 'val'),
                         'illegible_result': 'illegible_val.json',
                         'legible_result': 'legible_val.json',
                         'soccer_ball_list': 'soccer_ball_val.json',
@@ -87,7 +163,7 @@ dataset = {'SoccerNet':
                  'train': {
                      'images': 'train/train/images',
                      'gt': 'train/train/train_gt.json',
-                     'feature_output_folder': os.path.join(_main_repo, 'out/SoccerNetResults/train'),
+                     'feature_output_folder': os.path.join(_soccer_net_working_dir, 'train'),
                      'illegible_result': 'illegible_train.json',
                      'legible_result': 'legible_train.json',
                      'soccer_ball_list': 'soccer_ball_train.json',
@@ -99,7 +175,7 @@ dataset = {'SoccerNet':
                  },
                  'challenge': {
                         'images': 'challenge/challenge/images',
-                        'feature_output_folder': os.path.join(_main_repo, 'out/SoccerNetResults/challenge'),
+                        'feature_output_folder': os.path.join(_soccer_net_working_dir, 'challenge'),
                         'gt': '',
                         'illegible_result': 'challenge_illegible.json',
                         'soccer_ball_list': 'challenge_soccer_ball.json',
@@ -113,6 +189,7 @@ dataset = {'SoccerNet':
                         'final_result': 'challenge_final_results.json',
                         'raw_legible_result': 'challenge_raw_legible_vit.json'
                  },
+                 # PARSeq train: separate LMDB zip from README (not raw jersey-2023 images). Override path: JERSEY_STR_LMDB_ROOT
                  'numbers_data': 'lmdb',
 
                  'legibility_model': os.path.join(_main_repo, "models/legibility_resnet34_soccer_20240215.pth"),
@@ -120,7 +197,8 @@ dataset = {'SoccerNet':
 
                  'legibility_model_url':  "https://drive.google.com/uc?id=18HAuZbge3z8TSfRiX_FzsnKgiBs-RRNw",
                  'pose_model_url': 'https://drive.google.com/uc?id=1A3ftF118IcxMn_QONndR-8dPWpf7XzdV',
-                 'str_model': os.path.join(_main_repo, 'models/parseq_epoch=24-step=2575-val_accuracy=95.6044-val_NED=96.3255.ckpt'),
+                 # PARSeq jersey-aux: best val_accuracy checkpoint (top-k); override: JERSEY_SOCCERNET_STR_CKPT / JERSEY_STR_MODEL
+                 'str_model': _resolve_soccer_net_str_model(_DEFAULT_SOCCERNET_STR_MODEL),
 
                  #'str_model': 'pretrained=parseq',
                  'str_model_url': "https://drive.google.com/uc?id=1uRln22tlhneVt3P6MePmVxBWSLMsL3bm",

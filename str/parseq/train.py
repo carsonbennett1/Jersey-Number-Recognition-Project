@@ -13,8 +13,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import argparse
 import math
+import sys
 from pathlib import Path
+
+# Python 3.14+ argparse rejects Hydra's lazy help object for --shell-completion.
+if sys.version_info >= (3, 14):
+    _orig_check_help = argparse.ArgumentParser._check_help
+
+    def _check_help_coerce_lazy(self, action):
+        h = action.help
+        if h is not None and not isinstance(h, str):
+            action.help = str(h)
+        return _orig_check_help(self, action)
+
+    argparse.ArgumentParser._check_help = _check_help_coerce_lazy  # type: ignore[method-assign]
 
 from omegaconf import DictConfig, open_dict
 import hydra
@@ -29,6 +43,30 @@ from pytorch_lightning.utilities.model_summary import summarize
 from strhub.data.module import SceneTextDataModule
 from strhub.models.base import BaseSystem
 from strhub.models.utils import get_pretrained_weights
+
+
+def _filter_pretrained_state_dict(model, sd: dict) -> dict:
+    """Drop checkpoint tensors whose shape does not match the model (e.g. pos_queries for another max_label_length)."""
+    model_sd = model.state_dict()
+    out = {}
+    skipped = []
+    for k, v in sd.items():
+        if k not in model_sd:
+            continue
+        cur = model_sd[k]
+        if not hasattr(v, 'shape') or not hasattr(cur, 'shape'):
+            out[k] = v
+            continue
+        if cur.shape != v.shape:
+            skipped.append(k)
+            continue
+        out[k] = v
+    if skipped:
+        print(
+            f'Pretrained load: skipped {len(skipped)} key(s) with shape mismatch '
+            f'(re-init in model): {skipped}'
+        )
+    return out
 
 
 # Copied from OneCycleLR
@@ -77,7 +115,15 @@ def main(config: DictConfig):
     model: BaseSystem = hydra.utils.instantiate(config.model)
     # If specified, use pretrained weights to initialize the model
     if config.pretrained is not None:
-        model.load_state_dict(get_pretrained_weights(config.pretrained))
+        sd = get_pretrained_weights(config.pretrained)
+        sd = _filter_pretrained_state_dict(model, sd)
+        # Jersey aux heads and/or pos_queries (different max_label_length) may be absent or skipped
+        strict = False
+        miss = model.load_state_dict(sd, strict=strict)
+        print(
+            f'load_state_dict(strict=False) missing_keys={len(miss.missing_keys)} '
+            f'unexpected_keys={len(miss.unexpected_keys)}'
+        )
     print(summarize(model, max_depth=1 if model.hparams.name.startswith('parseq') else 2))
 
     datamodule: SceneTextDataModule = hydra.utils.instantiate(config.data)

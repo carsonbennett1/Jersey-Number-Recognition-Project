@@ -117,6 +117,12 @@ python main.py SoccerNet train --train_str
 python main.py Hockey train --train_str
 ```
 
+**Encoder multi-task (jersey aux, Approach 1):** adds CE on full number / tens / units / digit-count from mean-pooled encoder memory; decode stays standard PARSeq. Use `+experiment=parseq-jersey-aux` or:
+
+```bash
+python main.py SoccerNet train --train_str --jersey_aux_str
+```
+
 ### Legibility Classifier
 
 ```bash

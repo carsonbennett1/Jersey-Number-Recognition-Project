@@ -23,3 +23,10 @@ dropout: 0.1
 # Decoding mode (test)
 decode_ar: true
 refine_iters: 1
+
+# Jersey multi-task aux heads on encoder (training only; inference unchanged PARSeq decode)
+use_jersey_aux_heads: false
+aux_alpha_full: 0.25
+aux_alpha_tens: 0.15
+aux_alpha_units: 0.15
+aux_alpha_count: 0.2
