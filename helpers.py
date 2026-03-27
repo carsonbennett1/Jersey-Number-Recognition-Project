@@ -426,7 +426,7 @@ def predict_jersey_number(image_predictions, useBias=False):
     return batch_tokens, batch_probs
 
 def candidate_and_frame_processing(confidence_values, tracklet):
-    L = 4
+    L = 10
     e = 1e-9
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
@@ -476,11 +476,20 @@ def frame_sort_key(frame_name):
     if stem.isdigit():
         return int(stem) 
     else:
-        return stem
+        return 0
 
 def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered_results_path=None, useBias=False):
     legibility_values = None
     filtered_results = None
+
+    frame_to_score_mismatch = 0
+    frame_to_score_total = 0
+
+    no_frame_name = 0
+    frame_name_total = 0
+
+    no_frame_to_score_map = 0
+    frame_to_score_map = 0
 
     try:
         with open(raw_legibility_path, "r", encoding="utf-8") as legibility_file:
@@ -500,8 +509,13 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
     all_results = {}
     all_frame_names = {}
     final_results = {}
+
+    frame_name = ""
+
     with open(file_path, 'r') as f:
         results_dict = json.load(f)
+
+    # matching up frames with their respective values per tracklet
     for name in results_dict.keys():
         tmp = name.split('_', 1)
         tracklet = tmp[0]
@@ -509,16 +523,23 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
             frame_name = tmp[1] 
         else:
             frame_name = ""
+            no_frame_name+=1
+
+        frame_name_total+=1
 
         if tracklet not in all_results:
             all_results[tracklet] = []
             all_frame_names[tracklet] = []
             final_results[tracklet] = -1
+        
         raw_result = results_dict[name]['raw']
         raw_result = np.array([np.array(xi) for xi in raw_result])
 
         all_results[tracklet].append(raw_result)
         all_frame_names[tracklet].append(frame_name)
+
+    # debug printout
+    print(f"Total percentage of frame names that were '': {(no_frame_name / frame_name_total) * 100}%")
 
     final_full_results = {}
     for tracklet in all_results.keys():
@@ -548,6 +569,8 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
             print(f"Couldin't find tracklet name in JSON raw legibility for {tracklet}")
             continue
 
+        legibility_tracklet = []
+
         if filtered_results is not None and tracklet in filtered_results:
             frame_to_score = {}
             filtered_frames = filtered_results[tracklet]
@@ -556,13 +579,18 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
                     frame_name = filtered_frames[idx]
                     score = raw_tracklet_scores[idx]
                     frame_to_score[frame_name] = score
+                else:
+                    no_frame_to_score_map+=1
+                frame_to_score_total+=1
 
-            legibility_tracklet = []
             for frame in ordered_frame_names:
                 if frame in frame_to_score:
                     legibility_tracklet.append(frame_to_score[frame])
                 else:
                     legibility_tracklet.append(0.0)
+                    frame_to_score_mismatch+=1
+                frame_to_score_total+=1
+
         else:
             legibility_tracklet = list(raw_tracklet_scores)
 
@@ -571,6 +599,10 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
 
+    # debug printout
+    print(f"Percentage of frame to scores that were zero: {(frame_to_score_mismatch / frame_to_score_total) * 100}%")
+    print(f"Percentage of frame to scores maps that were unsuccessful: {(no_frame_to_score_map / frame_to_score_total) * 100}%")
+    
     return final_results, final_full_results
 
 def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = False, useTh = False):
