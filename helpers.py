@@ -482,15 +482,6 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
     legibility_values = None
     filtered_results = None
 
-    frame_to_score_mismatch = 0
-    frame_to_score_total = 0
-
-    no_frame_name = 0
-    frame_name_total = 0
-
-    no_frame_to_score_map = 0
-    frame_to_score_map = 0
-
     try:
         with open(raw_legibility_path, "r", encoding="utf-8") as legibility_file:
             legibility_values = json.load(legibility_file)
@@ -515,7 +506,6 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
     with open(file_path, 'r') as f:
         results_dict = json.load(f)
 
-    # matching up frames with their respective values per tracklet
     for name in results_dict.keys():
         tmp = name.split('_', 1)
         tracklet = tmp[0]
@@ -537,9 +527,6 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
 
         all_results[tracklet].append(raw_result)
         all_frame_names[tracklet].append(frame_name)
-
-    # debug printout
-    print(f"Total percentage of frame names that were '': {(no_frame_name / frame_name_total) * 100}%")
 
     final_full_results = {}
     for tracklet in all_results.keys():
@@ -576,7 +563,7 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
             filtered_frames = filtered_results[tracklet]
             for idx in range(len(filtered_frames)):
                 if idx < len(raw_tracklet_scores):
-                    frame_name = filtered_frames[idx]
+                    frame_name = filtered_frames[idx].split("_", 1)[1]
                     score = raw_tracklet_scores[idx]
                     frame_to_score[frame_name] = score
                 else:
@@ -598,10 +585,6 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
 
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
-
-    # debug printout
-    print(f"Percentage of frame to scores that were zero: {(frame_to_score_mismatch / frame_to_score_total) * 100}%")
-    print(f"Percentage of frame to scores maps that were unsuccessful: {(no_frame_to_score_map / frame_to_score_total) * 100}%")
     
     return final_results, final_full_results
 
