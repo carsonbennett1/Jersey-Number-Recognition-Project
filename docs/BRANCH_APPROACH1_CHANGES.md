@@ -119,6 +119,12 @@ Remove-Item Env:JERSEY_USE_SHARED_PIPELINE_OUTPUT -ErrorAction SilentlyContinue
 python main.py SoccerNet test
 ```
 
+**Oracle accuracy after stage 6 (fixed crops):** [`oracle_max_after_stage6.py`](../oracle_max_after_stage6.py) prints (1) aggregation-only ceiling from current `jersey_id_results.json`, and (2) perfect-STR oracle after rerunning combine with synthetic per-crop GT labels. Example:
+
+```bash
+python oracle_max_after_stage6.py --part test --working-dir out/pipeline_runs/approach1/SoccerNetResults
+```
+
 ---
 
 ## 8. File checklist (quick reference)
@@ -130,9 +136,11 @@ python main.py SoccerNet test
 - `str/parseq/strhub/data/dataset.py` — safer `build_tree_dataset`
 - `str/parseq/strhub/data/module.py` — train/val path fallbacks
 - `str/parseq/configs/model/parseq.yaml` — aux flags and alphas
+- `str/parseq/configs/aux_alpha_presets.yaml` — 20 named `aux_alpha_*` preset sets for experiments
 - `str/parseq/configs/experiment/parseq-jersey-aux.yaml` — enable aux
 - `str/parseq/strhub/models/parseq/system.py` — aux heads + loss
 - `docs/MODEL_SPECS.md` — training note
+- `oracle_max_after_stage6.py` — oracle upper bounds on track accuracy after crops (stage 6)
 
 ---
 
