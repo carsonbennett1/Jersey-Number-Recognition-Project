@@ -1,8 +1,10 @@
+
 import json
 import subprocess
 from copy import deepcopy
 import cv2
 import os
+import re
 import json
 import numpy as np
 from tqdm import tqdm
@@ -12,12 +14,10 @@ import random
 import shutil
 from pathlib import Path
 from scipy.special import softmax as softmax
-
 json_img_template = { "id": 0,
             "file_name": "",
             "width": 0,
             "height": 0}
-
 json_annotation_template = {"id": 0,
             "image_id": 0,
             "category_id": 1,
@@ -27,16 +27,13 @@ json_annotation_template = {"id": 0,
                 0,
                 0
             ]}
-
 # Constants for pose-based torso cropping
 PADDING = 5
 CONFIDENCE_THRESHOLD = 0.4
 TS = 2.367
 HEIGHT_MIN = 35
 WIDTH_MIN = 30
-
 bias_for_digits = [0.06, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094, 0.094]
-
 # Generate image JSON COCO format for ViTPose to consume
 def generate_json(file_names, json_file_path):
     img_id = 0
@@ -47,24 +44,18 @@ def generate_json(file_names, json_file_path):
         height, width, _ = img.shape
         img_entry = deepcopy(json_img_template)
         ann_entry = deepcopy(json_annotation_template)
-
         img_entry["file_name"] = f
         img_entry["width"] = width
         img_entry["height"] = height
         img_entry["id"] = img_id
-
         ann_entry["id"] = ann_id
         ann_entry["image_id"] = img_id
         ann_entry["bbox"] = [0, 0, width, height]
-
         json_dict["images"].append(img_entry)
         json_dict["annotations"].append(ann_entry)
-
         img_id += 1
-
     with open(json_file_path, 'w') as fp:
         json.dump(json_dict, fp)
-
 # get confidence-filtered points from pose results
 def get_points(pose):
     points = pose["keypoints"]
@@ -79,7 +70,6 @@ def get_points(pose):
             return []
         result.append(r[:2])
     return result
-
 # crop torso based on joints and save cropped images
 def generate_crops_for_all(json_file, crops_destination_dir):
     with open(json_file, 'r') as f:
@@ -122,13 +112,11 @@ def generate_crops_for_all(json_file, crops_destination_dir):
         cv2.imwrite(os.path.join(crops_destination_dir, name), crop)
     return skipped, saved
 
-
 def get_mean_conf(points):
     total = 0
     for p in points:
         total += p[2]
     return total/len(points)
-
 
 def generate_crops_from_detections(det_path, crops_destination_dir, legible_results, images_dir):
     all_legible = []
@@ -137,7 +125,6 @@ def generate_crops_from_detections(det_path, crops_destination_dir, legible_resu
             all_legible.append(entry)
     with open(det_path, 'r') as f:
         bboxes = json.load(f)
-
     for img_name in all_legible:
         base_name = os.path.basename(img_name)
         if not base_name in bboxes.keys():
@@ -161,9 +148,7 @@ def generate_crops_from_detections(det_path, crops_destination_dir, legible_resu
         #print(x1,x2,y1,y2)
         crop = img[y1:y2, x1:x2, :]
         h, w, _ = crop.shape
-
         cv2.imwrite(os.path.join(crops_destination_dir, base_name), crop)
-
 # crop torso based on joints and save cropped images
 def generate_crops(json_file, crops_destination_dir, legible_results, all_legible = None):
     if all_legible is None:
@@ -181,7 +166,6 @@ def generate_crops(json_file, crops_destination_dir, legible_results, all_legibl
     for entry in tqdm(all_poses):
         filtered_points = get_points(entry)
         img_name = entry["img_name"]
-
         if not os.path.basename(img_name) in all_legible:
             continue
         if len(filtered_points) == 0:
@@ -224,7 +208,6 @@ def generate_crops(json_file, crops_destination_dir, legible_results, all_legibl
         cv2.imwrite(os.path.join(crops_destination_dir, name), crop)
     print(f"skipped {misses} out of {len(all_poses)}")
     return skipped, saved
-
 def is_valid_number(string):
     if string == '-' or len(string) > 2:
         return False
@@ -236,14 +219,12 @@ def is_valid_number(string):
         return True
     else:
         False
-
 # add bias - give twice the weight to double digit predictions
 def get_bias(value):
     if int(value) > 9:
         return 0.61
     else:
         return 0.39
-
 SUM_THRESHOLD = 1
 FILTER_THRESHOLD = 0.2
 def find_best_prediction(results, useBias=False):
@@ -261,18 +242,15 @@ def find_best_prediction(results, useBias=False):
         adjusted_prob = rows_with_value[:, 1] * b
         sum_weights = np.sum(adjusted_prob)
         weights.append(sum_weights)
-
     best_weight = np.max(weights)
     index_of_best = np.argmax(weights)
     best_prediction = unique_predictions[index_of_best] if best_weight > SUM_THRESHOLD else -1
     return best_prediction, unique_predictions, weights
 
-
 token_list = 'E0123456789'
 # Test calibration
 true_conf = [0.12, 0.13609467, 0.25098814, 0.38429752, 0.43631613, 0.48029819, 0.56463068, 0.94912186]
 pred_conf = [0.27909853, 0.36124473, 0.45841138, 0.54969843, 0.65061644, 0.74988696, 0.85455219, 0.99713011]
-
 
 def linear_interpolation(x1, y1, x2, y2, x):
     """
@@ -281,12 +259,9 @@ def linear_interpolation(x1, y1, x2, y2, x):
     """
     # Calculate the slope (m)
     m = (y2 - y1) / (x2 - x1)
-
     # Calculate the interpolated value (y)
     y = y1 + m * (x - x1)
-
     return y
-
 def get_interval_index(prob):
     if prob < pred_conf[0]:
         return -1
@@ -295,7 +270,6 @@ def get_interval_index(prob):
             return i
         if prob >= pred_conf[i] and prob <= pred_conf[i+1]:
             return i
-
 def get_calibrated_value(prob):
     # find interval, linear function to calculate true prob
     i = get_interval_index(prob)
@@ -305,7 +279,6 @@ def get_calibrated_value(prob):
         return prob
     else:
         return linear_interpolation(pred_conf[i], true_conf[i], pred_conf[i+1], true_conf[i+1], prob)
-
 
 
 def find_best_prediction_raw(results):
@@ -325,27 +298,22 @@ def find_best_prediction_raw(results):
             break
     print(batch_tokens, batch_probs)
     return batch_tokens, batch_probs
-
 def apply_bias(raw_result):
     marginal_likelihood = raw_result[1][0] * 0.39 + sum([x * 0.061 for x in raw_result[1][1:]])
     raw_result[1][0] = (raw_result[1][0] * 0.39) / marginal_likelihood
     raw_result[1][1:] = [(x * 0.061) / marginal_likelihood for x in raw_result[1][1:]]
     return raw_result
-
 def calibrate_and_apply_bias_raw(raw_result):
     calib_function = np.vectorize(get_calibrated_value)
     raw_result = calib_function(raw_result)
     raw_result = apply_bias(raw_result)
     return raw_result
-
 def find_best_prediction_with_vector(results):
     weights = np.sum(results, axis=0)
-
     best_weight = np.max(weights)
     index_of_best = np.argmax(weights)
     #best_prediction = unique_predictions[index_of_best] if best_weight > SUM_THRESHOLD else -1
     return index_of_best+1, [], weights
-
 
 def apply_ts(logits):
     raw = np.array(logits) / TS
@@ -353,29 +321,23 @@ def apply_ts(logits):
     conf1 = softmax(raw[1])
     return [conf0, conf1]
 
-
 def initialize_priors(useBias, num_digits=11):
     """ Initialize uniform priors for each digit in both positions. """
     if not useBias:
         return np.full(num_digits, 1.0 / num_digits), np.full(num_digits, 1.0 / num_digits)
     else:
         return np.full(num_digits, 1.0 / num_digits), np.array(bias_for_digits)
-
 def update_posteriors(priors, likelihoods):
     """ Update posterior probabilities based on the likelihoods (model outputs). """
     tens_priors, units_priors = priors
     tens_likelihood, units_likelihood = likelihoods
-
     # Update tens position
     tens_posterior = tens_priors * tens_likelihood
     tens_posterior /= np.sum(tens_posterior)
-
     # Update units position
     units_posterior = units_priors * units_likelihood
     units_posterior /= np.sum(units_posterior)
-
     return tens_posterior, units_posterior
-
 def split_predictions_by_digit(image_predictions, priors=None):
     tens_likelihoods = []
     units_likelihoods = []
@@ -386,9 +348,7 @@ def split_predictions_by_digit(image_predictions, priors=None):
             e0, e1 = update_posteriors(priors, (e0, e1))
         tens_likelihoods.append(e0)
         units_likelihoods.append(e1)
-
     return np.array(tens_likelihoods), np.array(units_likelihoods)
-
 def predict_jersey_number(image_predictions, useBias=False):
     """
     Predict the jersey number based on a sequence of image predictions.
@@ -397,24 +357,18 @@ def predict_jersey_number(image_predictions, useBias=False):
                        (tens and units likelihoods, each of size 10).
     """
     tens_priors, units_priors = initialize_priors(useBias)
-
     # use sum of log-likelihoods
     tens_likelihoods, units_likelihoods = split_predictions_by_digit(image_predictions, priors=(tens_priors, units_priors))
-
     # if useBias:
     #     units_likelihoods = units_likelihoods * bias_for_digits
-
     log_likelihoods_tens = np.log(tens_likelihoods)
     sum_logl_tens = np.sum(log_likelihoods_tens, axis=0)
     log_likelihoods_units = np.log(units_likelihoods)
     sum_logl_units = np.sum(log_likelihoods_units, axis=0)
-
     tens_digit = np.argmax(sum_logl_tens)
     units_digit = np.argmax(sum_logl_units)
-
     prob_tens = sum_logl_tens[tens_digit]
     prob_units = sum_logl_units[units_digit]
-
     batch_tokens = token_list[tens_digit] + token_list[units_digit]
     batch_probs = [prob_tens, prob_units]
     for i in range(2):
@@ -422,98 +376,243 @@ def predict_jersey_number(image_predictions, useBias=False):
             batch_tokens = batch_tokens[:i]
             batch_probs = batch_probs[:i]
             break
-
     return batch_tokens, batch_probs
+def top_l_candidate_score(candidate_probs, tracklet, L=16, eps=1e-9):
+    """
+    Score all jersey-number candidates (1 to 99) for one tracklet using Top-L.
+    For each candidate jersey number, this function:
+    1. computes a frame score using q_t * log(P_t(k) + eps)
+    2. keeps only the best L frame scores
+    3. sums those scores
+    The candidate with the highest final score is returned.
+    Returns:
+        best_k: Best predicted jersey number (1..99).
+        best_score: Score of the best candidate.
+        scores: Score for all 99 candidates.
+    """
+    qt = np.array(tracklet, dtype=float)
+    if len(qt) == 0 or len(candidate_probs) == 0:
+        return 1, float("-inf"), np.full(99, float("-inf"))
+    usable_len = min(len(qt), len(candidate_probs))
+    qt = qt[:usable_len]
+    candidate_probs = candidate_probs[:usable_len]
+    scores = np.full(99, float("-inf"), dtype=float)
+    for k_idx in range(99):
+        # v_t(k) = q_t * log(P_t(k) + eps)
+        vt = qt * np.log(candidate_probs[:, k_idx] + eps)
+        # top-L frame selection for this candidate
+        L_eff = min(L, len(vt))
+        top_idx = np.argsort(vt)[-L_eff:]
+        scores[k_idx] = float(np.sum(vt[top_idx]))
+    best_idx = int(np.argmax(scores))   # 0..98
+    best_k = best_idx + 1               # 1..99
+    return best_k, scores[best_idx], scores
 
-def candidate_and_frame_processing(confidence_values, tracklet):
-    L = 4
-    e = 1e-9
-    qt = np.array(tracklet)
+def build_candidate_probs_1_to_99(tens_likelihood, unit_likelihood):
+    """
+    Build full jersey-number probabilities (1 to 99) from tens and units probabilities.
+    This function takes the model's tens and units outputs and combines them into
+    probabilities for full jersey numbers.
+    Examples:
+    - 7 is treated as (E, 7)
+    - 42 is treated as (4, 2)
+    The probability of a full number is computed by multiplying the matching
+    tens and units probabilities.
+    Returns:
+        Array [T(num frames), 99] where each row is one frame and each
+        column is the probability of jersey number k for that frame.
+    """
+    T = tens_likelihood.shape[0]
+    out = np.zeros((T, 99), dtype=float)
+    # token index mapping: E->0, digit d->d+1
+    for k in range(1, 100):
+        if k < 10:
+            tens_idx = 0          # E
+            unit_idx = k + 1      # digit k
+        else:
+            tens_digit = k // 10
+            unit_digit = k % 10
+            tens_idx = tens_digit + 1
+            unit_idx = unit_digit + 1
+        out[:, k - 1] = tens_likelihood[:, tens_idx] * unit_likelihood[:, unit_idx]
+    return out
 
-    columns = confidence_values.shape[1]
-    all_score_k_values = []
-
-    for i in range(columns):
-        frame_values = []  # contain scores
-        for j in range(len(confidence_values)):
-            vt_k = qt[j] * (np.log(confidence_values[j][i]) + e)
-            frame_values.append(vt_k)
-        
-        s_k = np.argsort(frame_values)
-        s_k_top_L = s_k[-L:]
-        
-        top_L_indices = []  # contain indices
-        for k in range(len(s_k_top_L)):
-            top_L_indices.append(frame_values[s_k_top_L[k]])  # append actual values for position k
-
-        score_k = np.sum(top_L_indices)
-        all_score_k_values.append(score_k)
-    
-    k_hat = np.argmax(all_score_k_values)
-    return k_hat
-
-def predict_jersey_number_top_L(image_predictions, tracklet, bias=False):
+def predict_jersey_number_top_L(image_predictions, tracklet, bias=False, L=16):
+    """
+    Predict the final jersey number for one tracklet using Top-L.
+    This function:
+        1. gets tens and units probabilities from the frame predictions
+        2. builds full-number probabilities for jersey numbers 1..99
+        3. applies Top-L scoring
+        4. returns the best jersey number / best score 
+    """
     tens_priors, unit_priors = initialize_priors(bias)
     tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
-
-    tens_scores = candidate_and_frame_processing(tens_likelihood, tracklet)
-    unit_scores = candidate_and_frame_processing(unit_likelihood, tracklet)
-
-    batch_tokens = token_list[tens_scores] + token_list[unit_scores]
-    batch_probs = [tens_scores, unit_scores]
-    for i in range(2):
-        if batch_tokens[i] == 'E':
-            batch_tokens = batch_tokens[:i]
-            batch_probs = batch_probs[:i]
-            break
-
-    return batch_tokens, batch_probs
-
-def process_jersey_id_predictions_top_L(file_path, useBias = False):
-    legibility_tracklet = None
-    try:
-        with open("./out/SoccerNetResults/raw_legible_result.json") as legibility_file: # file location main change on initial pipeline run
-            data = json.load(legibility_file)
-
-    except FileNotFoundError:
-        print("Raw legibility results file could not be found")
-        return
-
+    candidate_probs = build_candidate_probs_1_to_99(tens_likelihood, unit_likelihood)
+    best_k, best_score, _ = top_l_candidate_score(candidate_probs, tracklet, L=L)
+    return str(best_k), [best_score]
+def predict_jersey_number_top_L_from_candidate_probs(candidate_probs, tracklet, L=16, return_scores=False):
+    """
+    Predict jersey number for one tracklet using Top-L, given per-frame P_t(k).
+    candidate_probs: np.ndarray shape [T, 99] where column (k-1) is P_t(k) for k=1..99
+    tracklet: list/array of q_t legibility weights
+    """
+    best_k, best_score, all_scores = top_l_candidate_score(candidate_probs, tracklet, L=L)
+    if return_scores:
+        return str(best_k), [best_score], all_scores
+    return str(best_k), [best_score]
+def _frame_sort_key(frame_name):
+    """
+    Return a sorting key for a frame filename.
+    If the filename is a number, it is sorted as a number instead of a string.
+    This helps keep frames in the correct order.
+    """
+    stem = os.path.splitext(frame_name)[0]
+    return int(stem) if stem.isdigit() else stem
+def _norm_frame_key(name, tracklet=None):
+    """
+    Normalize a frame name so it can be matched across different files.
+    Different parts of the pipeline may store the same frame in different ways,
+    such as "648_141.jpg" or "141.jpg". This function converts them into a
+    shared format so they can be compared.
+    Returns:    
+        A normalized frame key that can be used for comparison.
+    """
+    b = os.path.basename(str(name))
+    stem = os.path.splitext(b)[0]  # e.g. "570_349" or "349"
+    if tracklet is not None:
+        pref = f"{tracklet}_"
+        if stem.startswith(pref):
+            stem = stem[len(pref):]
+    # If still contains underscores, use last chunk
+    if "_" in stem:
+        stem = stem.split("_")[-1]
+    # Prefer numeric canonical key if possible
+    m = re.search(r"(\d+)$", stem)
+    if m:
+        return str(int(m.group(1)))  # removes leading zeros consistently
+    return stem
+def process_jersey_id_predictions_top_L(
+    file_path,
+    raw_legibility_path,
+    filtered_results_path=None,
+    useBias=False,
+    L=4,
+):
+    """
+    Process all jersey-id predictions using the Top-L combine method.
+    This function loads frame-level STR predictions and raw legibility scores,
+    groups predictions by tracklet, matches each frame with its legibility score,
+    and predicts one final jersey number per tracklet.
+    It also applies simple illegible checks and returns both simple and detailed
+    results.
+    Returns:
+        Final predicted label for each tracklet.
+        Detailed result info for each tracklet.
+    """
+    TOP_L_VALUE = 16
+    TOP_L_ILLEGIBLE_QT_MAX_THRESHOLD = 0.5
+    TOP_L_ILLEGIBLE_SCORE_THRESHOLD = -5.0
+    eps = 1e-9
+    with open(raw_legibility_path, "r", encoding="utf-8") as legibility_file:
+        data = json.load(legibility_file)
+    filtered_results = None
+    if filtered_results_path is not None:
+        try:
+            with open(filtered_results_path) as filtered_file:
+                filtered_results = json.load(filtered_file)
+        except FileNotFoundError:
+            print("Filtered results file could not be found; using fallback frame ordering")
     all_results = {}
+    all_frame_names = {}
     final_results = {}
     with open(file_path, 'r') as f:
         results_dict = json.load(f)
     for name in results_dict.keys():
-        tmp = name.split('_')
+        tmp = name.split('_', 1)
         tracklet = tmp[0]
-
+        frame_name = tmp[1] if len(tmp) > 1 else ""
         if tracklet not in all_results:
             all_results[tracklet] = []
+            all_frame_names[tracklet] = []
             final_results[tracklet] = -1  # default
-        raw_result = results_dict[name]['logits']
-        raw_result = apply_ts(raw_result)
-
-        all_results[tracklet].append(raw_result)
-
+        # Disable independence assumption: build P_t(k) from decoded label + confidence.
+        confidence_raw = results_dict[name].get("confidence", 0.0)
+        if isinstance(confidence_raw, (list, tuple, np.ndarray)):
+            conf = 1.0
+            for x in list(confidence_raw)[:-1]:
+                conf *= float(x)
+        else:
+            conf = float(confidence_raw)
+        P_t = np.full(99, eps, dtype=float)
+        decoded_label = results_dict[name].get("label", None)
+        try:
+            decoded_k = int(decoded_label)
+        except (TypeError, ValueError):
+            decoded_k = -1
+        if 1 <= decoded_k <= 99:
+            P_t[decoded_k - 1] = conf
+        all_results[tracklet].append(P_t)
+        all_frame_names[tracklet].append(frame_name)
     final_full_results = {}
     for tracklet in all_results.keys():
         if len(all_results[tracklet]) == 0:
             continue
-        results = np.array(all_results[tracklet])
-
+        frame_and_results = sorted(
+            zip(all_frame_names[tracklet], all_results[tracklet]),
+            key=lambda x: _frame_sort_key(x[0])
+        )
+        ordered_frame_names = [x[0] for x in frame_and_results]
+        candidate_probs = np.array([x[1] for x in frame_and_results], dtype=float)
         try:
-            legibility_tracklet = data[tracklet]  # get exact tracklet name
-        except:
-            print(f"Couldin't find tracklet name in JSON raw legibility for {tracklet}")
+            raw_tracklet_scores = data[tracklet]  # get exact tracklet name
+        except KeyError:
+            print(f"Couldn't find tracklet name in JSON raw legibility for {tracklet}")
             continue
-
-        best_prediction, probs = predict_jersey_number_top_L(results, legibility_tracklet, bias=useBias)
-
-        final_results[tracklet] = str(int(best_prediction))
-        final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
-
+        if filtered_results is not None and tracklet in filtered_results:
+            # Build normalized key -> q_t score from filtered source list
+            frame_to_score = {}
+            for idx, frame in enumerate(filtered_results[tracklet]):
+                if idx >= len(raw_tracklet_scores):
+                    break
+                k = _norm_frame_key(frame, tracklet)
+                frame_to_score[k] = float(raw_tracklet_scores[idx])
+            # Map ordered STR frames to q_t with same normalized key space
+            legibility_tracklet = []
+            missing = 0
+            for frame in ordered_frame_names:
+                k = _norm_frame_key(frame, tracklet)
+                q = frame_to_score.get(k, None)
+                if q is None:
+                    missing += 1
+                    q = 0.0
+                legibility_tracklet.append(q)
+        else:
+            legibility_tracklet = list(raw_tracklet_scores[:len(ordered_frame_names)])
+            if len(legibility_tracklet) < len(ordered_frame_names):
+                legibility_tracklet += [0.0] * (len(ordered_frame_names) - len(legibility_tracklet))
+        best_prediction, probs = predict_jersey_number_top_L_from_candidate_probs(
+            candidate_probs, legibility_tracklet, L=TOP_L_VALUE
+        )
+        max_qt = float(np.max(legibility_tracklet)) if len(legibility_tracklet) > 0 else 0.0
+        best_score = float(probs[0]) if (probs is not None and len(probs) > 0) else float("-inf")
+        low_reliability_tracklet = max_qt < TOP_L_ILLEGIBLE_QT_MAX_THRESHOLD
+        weak_number_evidence = best_score < TOP_L_ILLEGIBLE_SCORE_THRESHOLD
+        # PARSeq tokenization can return '' when the first token is the end token ('E').
+        # Treat any non-numeric/empty prediction as illegible = -1.
+        try:
+            best_int = int(best_prediction) if best_prediction not in (None, '', 'E') else -1
+        except (TypeError, ValueError):
+            best_int = -1
+        if low_reliability_tracklet or weak_number_evidence:
+            best_int = -1
+        final_results[tracklet] = str(best_int)
+        final_full_results[tracklet] = {
+            'label': str(best_int),
+            'unique': [],
+            'weights': probs,
+        }
     return final_results, final_full_results
-
 def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = False, useTh = False):
     all_results = {}
     final_results = {}
@@ -522,7 +621,6 @@ def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = F
     for name in results_dict.keys():
         tmp = name.split('_')
         tracklet = tmp[0]
-
         if tracklet not in all_results:
             all_results[tracklet] = []
             final_results[tracklet] = -1  # default
@@ -534,17 +632,13 @@ def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = F
             raw_result = results_dict[name]['logits']
             raw_result = apply_ts(raw_result)
             #raw_result = apply_bias(raw_result)
-
         all_results[tracklet].append(raw_result)
-
     final_full_results = {}
     for tracklet in all_results.keys():
         if len(all_results[tracklet]) == 0:
             continue
         results = np.array(all_results[tracklet])
-
         best_prediction, probs = predict_jersey_number(results, useBias=useBias)
-
         # best_prediction, all_unique, weights = find_best_prediction_with_vector(results)
         prob = probs[0] if len(probs) == 1 else probs[0] + probs[1]
         if useTh and prob < -850:
@@ -555,9 +649,7 @@ def process_jersey_id_predictions_bayesian(file_path, useTS = False, useBias = F
             final_results[tracklet] = str(int(best_prediction))
             final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [],
                                         'weights': probs}
-
     return final_results, final_full_results
-
 def process_jersey_id_predictions_raw(file_path, useTS = False ):
     all_results = {}
     final_results = {}
@@ -566,7 +658,6 @@ def process_jersey_id_predictions_raw(file_path, useTS = False ):
     for name in results_dict.keys():
         tmp = name.split('_')
         tracklet = tmp[0]
-
         if tracklet not in all_results:
             all_results[tracklet] = []
             final_results[tracklet] = -1  # default
@@ -578,27 +669,20 @@ def process_jersey_id_predictions_raw(file_path, useTS = False ):
             raw_result = results_dict[name]['logits']
             raw_result = apply_ts(raw_result)
             raw_result = apply_bias(raw_result)
-
         all_results[tracklet].append(raw_result)
-
     final_full_results = {}
     for tracklet in all_results.keys():
         if len(all_results[tracklet]) == 0:
             continue
         results = np.array(all_results[tracklet])
-
         best_prediction, probs = find_best_prediction_raw(results)
-
         # best_prediction, all_unique, weights = find_best_prediction_with_vector(results)
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [],
                                         'weights': probs}
-
     return final_results, final_full_results
-
 def list_dirs(path):
     return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-
 def identify_soccer_balls(image_dir, soccer_ball_list):
     # check 10 random images for each track, mark as soccer ball if the size matches typical soccer ball size
     ball_list = []
@@ -624,7 +708,6 @@ def identify_soccer_balls(image_dir, soccer_ball_list):
     with open(soccer_ball_list, 'w') as fp:
         json.dump({'ball_tracks': ball_list}, fp)
     return True
-
 def process_jersey_id_predictions(file_path, useBias=False):
     all_results = {}
     final_results = {}
@@ -633,7 +716,6 @@ def process_jersey_id_predictions(file_path, useBias=False):
     for name in results_dict.keys():
         tmp = name.split('_')
         tracklet = tmp[0]
-
         if tracklet not in all_results:
             all_results[tracklet] = []
             final_results[tracklet] = -1 #default
@@ -645,23 +727,17 @@ def process_jersey_id_predictions(file_path, useBias=False):
         total_prob = 1
         for x in confidence[:-1]:
             total_prob = total_prob * float(x)
-
         all_results[tracklet].append([int(value), total_prob])
-
     final_full_results = {}
     for tracklet in all_results.keys():
         if len(all_results[tracklet]) == 0:
             continue
         results = np.array(all_results[tracklet])
-
         best_prediction, all_unique, weights = find_best_prediction(results, useBias=useBias)
-
         #best_prediction, all_unique, weights = find_best_prediction_with_vector(results)
         final_results[tracklet] = str(int(best_prediction))
         final_full_results[tracklet] = {'label':  str(int(best_prediction)), 'unique': all_unique, 'weights':weights}
-
     return final_results, final_full_results
-
 THRESHOLD_FOR_TACK_LEGIBILITY = 0
 def is_track_legible(track, illegible_list, legible_tracklets):
     if track in illegible_list:
@@ -672,20 +748,17 @@ def is_track_legible(track, illegible_list, legible_tracklets):
     except KeyError:
         return False
     return True
-
 def evaluate_legibility(gt_path, illegible_path, legible_tracklets, soccer_ball_list = None):
     with open(gt_path, 'r') as gf:
         gt_dict = json.load(gf)
     with open(illegible_path, 'r') as gf:
         illegible_list = json.load(gf)
         illegible_list = illegible_list['illegible']
-
     balls_list = []
     if not soccer_ball_list is None:
         with open(soccer_ball_list, 'r') as sf:
             balls_json = json.load(sf)
         balls_list = balls_json['ball_tracks']
-
     correct = 0
     total = 0
     TP = 0
@@ -698,7 +771,6 @@ def evaluate_legibility(gt_path, illegible_path, legible_tracklets, soccer_ball_
         # don't consider soccer balls
         if track in balls_list:
             continue
-
         true_value = str(gt_dict[track])
         predicted_legible = is_track_legible(track, illegible_list, legible_tracklets)
         if true_value == '-1' and not predicted_legible:
@@ -720,14 +792,12 @@ def evaluate_legibility(gt_path, illegible_path, legible_tracklets, soccer_ball_
             FN += 1
             print(f"FN:{track}")
         total += 1
-
     print(f'Correct {correct} out of {total}. Accuracy {100*correct/total}%.')
     print(f'TP={TP}, TN={TN}, FP={FP}, FN={FN}')
     Pr = TP / (TP + FP)
     Recall = TP / (TP + FN)
     print(f"Precision={Pr}, Recall={Recall}")
     print(f"F1={2 * Pr * Recall / (Pr + Recall)}")
-
 
 SKIP_ILLEGIBLE = False
 def evaluate_results(consolidated_dict, gt_dict, full_results = None):
@@ -769,12 +839,10 @@ def evaluate_results(consolidated_dict, gt_dict, full_results = None):
     #print(f'mismarked {illegible_mistake_count} out of {len(mistakes)} as illegible')
     #print(f'mismarked {illegible_gt_count} out of {len(mistakes)} as legible')
     #print(f"predicted correctly but not picked: {count_of_correct_in_full_results}")
-
 def convert_polygon_to_bbox(polygon):
     # Initialize min and max values with the first vertex of the polygon.
     min_x, min_y = polygon[0], polygon[1]
     max_x, max_y = polygon[0], polygon[1]
-
     # Iterate through the vertices to find min and max coordinates.
     for i in range(0, len(polygon), 2):
         x, y = polygon[i], polygon[i + 1]
@@ -782,34 +850,28 @@ def convert_polygon_to_bbox(polygon):
         max_x = max(max_x, x)
         min_y = min(min_y, y)
         max_y = max(max_y, y)
-
     # Create the AABB as a tuple of (min_x, min_y, max_x, max_y).
     return [min_x, min_y, max_x, max_y]
-
 
 def get_track(path):
     filename = os.path.basename(path)
     tmp = filename.split('_')
     return tmp[0]
-
 def generate_different_split(current_directory, target_directory, split_val = 0.3):
     names = ['image', 'label']
     old_train_gt_path = os.path.join(current_directory, 'train', 'train_gt.txt')
     old_val_gt_path = os.path.join(current_directory, 'val', 'val_gt.txt')
     old_train_path = os.path.join(current_directory, 'train', 'images')
     old_val_path = os.path.join(current_directory, 'val', 'images')
-
     old_train_gt = pd.read_csv(old_train_gt_path, names=names, header=None)
     old_val_gt = pd.read_csv(old_val_gt_path, names=names, header=None)
     old_gt = pd.concat([old_train_gt, old_val_gt])
-
     def get_path(image_name):
         if image_name in set(old_train_gt['image']):
             dir = old_train_path
         else:
             dir = old_val_path
         return os.path.join(dir, image_name)
-
     old_gt['track'] = old_gt['image'].apply(get_track)
     track_numbers = old_gt.track.unique().size
     print(f'Found {track_numbers}, splitting {1-split_val}/{split_val} into train/val')
@@ -817,17 +879,13 @@ def generate_different_split(current_directory, target_directory, split_val = 0.
     val_tracks = random.sample(unique_tracks, int(track_numbers*split_val))
     all_val_images = old_gt.loc[old_gt['track'].isin(val_tracks)]
     all_train_images = old_gt.loc[~old_gt['track'].isin(val_tracks)]
-
     # make directories if they don't exist
     new_val_dir = os.path.join(target_directory, 'val')
     new_train_dir = os.path.join(target_directory, 'train')
-
     new_val_img_dir = os.path.join(target_directory, 'val', 'images')
     new_train_img_dir = os.path.join(target_directory, 'train', 'images')
-
     Path(new_val_img_dir).mkdir(parents=True, exist_ok=True)
     Path(new_train_img_dir).mkdir(parents=True, exist_ok=True)
-
     #copy files and save new gt
     with open(os.path.join(new_val_dir, 'val_gt.txt'), 'w') as vf:
         for index, row in all_val_images.iterrows():
@@ -836,7 +894,6 @@ def generate_different_split(current_directory, target_directory, split_val = 0.
             dst = os.path.join(new_val_img_dir, filename)
             shutil.copy(get_path(row['image']), dst)
             vf.write(f"{row['image']},{row['label']}\n")
-
     with open(os.path.join(new_train_dir, 'train_gt.txt'), 'w') as tf:
         for index, row in all_train_images.iterrows():
             # copy file
@@ -844,15 +901,12 @@ def generate_different_split(current_directory, target_directory, split_val = 0.
             dst = os.path.join(new_train_img_dir, filename)
             shutil.copy(get_path(row['image']), dst)
             tf.write(f"{row['image']},{row['label']}\n")
-
 import configuration as config
-
 def generate_crops_for_split(source, target, split):
     names = ['image', 'label']
     old_gt_path = os.path.join(source, split, split + '_gt.txt')
     old_gt = pd.read_csv(old_gt_path, names=names, header=None)
     old_path = os.path.join(source, split,  'images')
-
     legibles = old_gt[old_gt['label']==1]
     number_legibles = legibles.shape[0]
     sample_illegible = random.sample(set(old_gt[old_gt['label']==0].image),  number_legibles)
@@ -861,14 +915,12 @@ def generate_crops_for_split(source, target, split):
         all_images.append(os.path.join(old_path, img))
     for img in sample_illegible:
         all_images.append(os.path.join(old_path, img))
-
     print("Genetating json for pose detector")
     crops_dir = os.path.join(target, split, 'images')
     Path(crops_dir).mkdir(parents=True, exist_ok=True)
     input_json = os.path.join(target, f"pose_input_{split}.json")
     output_json = os.path.join(target, f"pose_{split}.json")
     generate_json(all_images, input_json)
-
     print("Extracting pose")
     pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
     pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
@@ -880,10 +932,8 @@ def generate_crops_for_split(source, target, split):
     ], cwd=project_root).returncode == 0
     if not success:
         print("Error extracting pose")
-
     print("Generate crops")
     generate_crops_for_all(output_json, crops_dir)
-
     print("Update gt")
     # prune gt to remove images with no crops
     crops_list_train = os.listdir(crops_dir)
@@ -891,12 +941,10 @@ def generate_crops_for_split(source, target, split):
         for index, row in old_gt.iterrows():
             if row['image'] in crops_list_train:
                 tf.write(f"{row['image']},{row['label']}\n")
-
 def generate_crops_based(source, target, splits):
     for split in splits:
         print(f"Processing {split}")
         generate_crops_for_split(source, target, split)
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('source', help="source directory of current legibility dataset")
@@ -908,10 +956,7 @@ if __name__ == '__main__':
     splits = ['train', 'val']
     if args.crops_based and args.hockey:
         splits.append('test')
-
     if not args.crops_based:
         generate_different_split(args.source, args.target)
     else:
         generate_crops_based(args.source, args.target, splits)
-
-

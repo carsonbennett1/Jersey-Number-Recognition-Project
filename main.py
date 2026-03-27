@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import sys
@@ -9,10 +10,8 @@ import helpers
 from tqdm import tqdm
 import configuration as config
 from pathlib import Path
-
 def list_dirs(path):
     return [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-
 def _run_cmd(args_list, cwd=None):
     """Run command via subprocess (avoids Windows cmd.exe path parsing issues)."""
     try:
@@ -21,14 +20,12 @@ def _run_cmd(args_list, cwd=None):
     except FileNotFoundError as e:
         print(f"ERROR: {e}")
         return False
-
 def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'gauss', exclude_balls=True):
     root_dir = config.dataset['SoccerNet']['root_dir']
     image_dir = config.dataset['SoccerNet'][args.part]['images']
     path_to_images = os.path.join(root_dir, image_dir)
     tracklets = list_dirs(path_to_images)
     results_dict = {x:[] for x in tracklets}
-
     if use_filtered:
         if filter == 'sim':
             path_to_filter_results = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -38,7 +35,6 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
                                                   config.dataset['SoccerNet'][args.part]['gauss_filtered'])
         with open(path_to_filter_results, 'r') as f:
             filtered = json.load(f)
-
 
     if exclude_balls:
         updated_tracklets = []
@@ -51,31 +47,30 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
             if not track in ball_list:
                 updated_tracklets.append(track)
         tracklets = updated_tracklets
-
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
         if use_filtered:
-            images = filtered[directory]
+            # Some directories may be absent from the filtered JSON; skip them
+            # instead of crashing with KeyError.
+            images = filtered.get(directory)
+            if images is None:
+                continue
         else:
             images = os.listdir(track_dir)
         #images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
         track_results = lc.run(images_full_path, config.dataset['SoccerNet']['legibility_model'], threshold=-1, arch=config.dataset['SoccerNet']['legibility_model_arch'])
         results_dict[directory] = track_results
-
     # save results
     full_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['raw_legible_result'])
     with open(full_legibile_path, "w") as outfile:
         json.dump(results_dict, outfile)
-
     return results_dict
-
 def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim', exclude_balls=True):
     root_dir = config.dataset['SoccerNet']['root_dir']
     image_dir = config.dataset['SoccerNet'][args.part]['images']
     path_to_images = os.path.join(root_dir, image_dir)
     tracklets = list_dirs(path_to_images)
-
     if use_filtered:
         if filter == 'sim':
             path_to_filter_results = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -85,10 +80,8 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
                                                   config.dataset['SoccerNet'][args.part]['gauss_filtered'])
         with open(path_to_filter_results, 'r') as f:
             filtered = json.load(f)
-
     legible_tracklets = {}
     illegible_tracklets = []
-
     if exclude_balls:
         updated_tracklets = []
         soccer_ball_list = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -101,15 +94,17 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
                 updated_tracklets.append(track)
         tracklets = updated_tracklets
 
-
     model_path = config.dataset['SoccerNet']['legibility_model']
     model_arch = config.dataset['SoccerNet']['legibility_model_arch']
     leg_model, leg_device = lc.load_legibility_model(model_path, arch=model_arch)
-
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
         if use_filtered:
-            images = filtered[directory]
+            # Some directories may be absent from the filtered JSON; skip them
+            # instead of crashing with KeyError.
+            images = filtered.get(directory)
+            if images is None:
+                continue
         else:
             images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
@@ -120,20 +115,16 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
         else:
             legible_images = [images_full_path[i] for i in legible]
             legible_tracklets[directory] = legible_images
-
     # save results
     json_object = json.dumps(legible_tracklets, indent=4)
     full_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['legible_result'])
     with open(full_legibile_path, "w") as outfile:
         outfile.write(json_object)
-
     full_illegibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config. dataset['SoccerNet'][args.part]['illegible_result'])
     json_object = json.dumps({'illegible': illegible_tracklets}, indent=4)
     with open(full_illegibile_path, "w") as outfile:
         outfile.write(json_object)
-
     return legible_tracklets, illegible_tracklets
-
 
 def generate_json_for_pose_estimator(args, legible = None):
     all_files = []
@@ -151,10 +142,8 @@ def generate_json_for_pose_estimator(args, legible = None):
             imgs = [f for f in os.listdir(track_dir) if not f.startswith('.')]
             for img in imgs:
                 all_files.append(os.path.join(track_dir, img))
-
     output_json = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['pose_input_json'])
     helpers.generate_json(all_files, output_json)
-
 
 def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None):
     if not soccer_ball_list is None:
@@ -163,14 +152,12 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
         balls_list = balls_json['ball_tracks']
         for entry in balls_list:
             dict[str(entry)] = 1
-
     with open(illegible_path, 'r') as f:
         illegile_dict = json.load(f)
     all_illegible = illegile_dict['illegible']
     for entry in all_illegible:
         if not str(entry) in dict.keys():
             dict[str(entry)] = -1
-
     all_tracks = list_dirs(image_dir)
     for t in all_tracks:
         if not t in dict.keys():
@@ -178,7 +165,6 @@ def consolidated_results(image_dir, dict, illegible_path, soccer_ball_list=None)
         else:
             dict[t] = int(dict[t])
     return dict
-
 def train_parseq(args):
     parseq_dir = config.str_home
     current_dir = os.getcwd()
@@ -195,7 +181,6 @@ def train_parseq(args):
         'trainer.val_check_interval=1', 'data.batch_size=128', 'data.max_label_length=2'
     ], cwd=parseq_dir)
     print("Done training")
-
 
 def hockey_pipeline(args):
     # actions = {"legible": True,
@@ -214,7 +199,6 @@ def hockey_pipeline(args):
             '--arch', 'resnet34', '--trained_model', config.dataset['Hockey']['legibility_model']
         ], cwd=_project_root)
         print("Done legibility classifier")
-
     if success and args.pipeline['str']:
         print("Predict numbers")
         data_root = os.path.join(_project_root, config.dataset['Hockey']['root_dir'], config.dataset['Hockey']['numbers_data'])
@@ -224,36 +208,33 @@ def hockey_pipeline(args):
             '--data_root', data_root
         ], cwd=_project_root)
         print("Done predict numbers")
-
 def _output_exists(path):
     return os.path.isfile(path) and os.path.getsize(path) > 0
-
 def soccer_net_pipeline(args):
     legible_dict = None
+    raw_legible_dict = None
     legible_results = None
     consolidated_dict = None
     Path(config.dataset['SoccerNet']['working_dir']).mkdir(parents=True, exist_ok=True)
     success = True
     _project_root = os.path.dirname(os.path.abspath(__file__))
-
     image_dir = os.path.join(config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet'][args.part]['images'])
     soccer_ball_list = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                       config.dataset['SoccerNet'][args.part]['soccer_ball_list'])
     features_dir = config.dataset['SoccerNet'][args.part]['feature_output_folder']
     full_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                       config.dataset['SoccerNet'][args.part]['legible_result'])
+    raw_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
+                                     config.dataset['SoccerNet'][args.part]['raw_legible_result'])
     illegible_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                   config.dataset['SoccerNet'][args.part]['illegible_result'])
     gt_path = os.path.join(config.dataset['SoccerNet']['root_dir'], config.dataset['SoccerNet'][args.part]['gt'])
-
     input_json = os.path.join(config.dataset['SoccerNet']['working_dir'],
                               config.dataset['SoccerNet'][args.part]['pose_input_json'])
     output_json = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                config.dataset['SoccerNet'][args.part]['pose_output_json'])
-
     gauss_filtered_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                        config.dataset['SoccerNet'][args.part]['gauss_filtered'])
-
     # 1. Filter out soccer ball based on images size
     if args.pipeline['soccer_ball_filter']:
         if _output_exists(soccer_ball_list):
@@ -262,7 +243,6 @@ def soccer_net_pipeline(args):
             print("Determine soccer ball")
             success = helpers.identify_soccer_balls(image_dir, soccer_ball_list)
             print("Done determine soccer ball")
-
     # 2. generate and store features for each image in each tracklet
     if args.pipeline['feat']:
         print("Generate features")
@@ -277,7 +257,6 @@ def soccer_net_pipeline(args):
                 '--output_folder', features_dir
             ], cwd=_project_root)
         print("Done generating features")
-
     # 3. identify and remove outliers based on features
     if args.pipeline['filter'] and success:
         if _output_exists(gauss_filtered_path):
@@ -291,7 +270,6 @@ def soccer_net_pipeline(args):
                 '--output_folder', features_dir
             ], cwd=_project_root)
             print("Done removing outliers")
-
     # 4. pass all images through legibility classifier and record results
     if args.pipeline['legible'] and success:
         if _output_exists(full_legibile_path) and _output_exists(illegible_path):
@@ -301,12 +279,13 @@ def soccer_net_pipeline(args):
         else:
             print("Classifying Legibility:")
             try:
-                legible_dict, illegible_tracklets = get_soccer_net_raw_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
+                legible_dict, illegible_tracklets = get_soccer_net_legibility_results(
+                    args, use_filtered=True, filter='gauss', exclude_balls=True
+                )
             except Exception as error:
                 print(f'Failed to run legibility classifier:{error}')
                 success = False
             print("Done classifying legibility")
-
     # 4.5 evaluate tracklet legibility results
     if args.pipeline['legible_eval'] and success:
         print("Evaluate Legibility results:")
@@ -314,13 +293,11 @@ def soccer_net_pipeline(args):
             if legible_dict is None:
                  with open(full_legibile_path, 'r') as openfile:
                     legible_dict = json.load(openfile)
-
             helpers.evaluate_legibility(gt_path, illegible_path, legible_dict, soccer_ball_list=soccer_ball_list)
         except Exception as e:
             print(e)
             success = False
         print("Done evaluating legibility")
-
 
     # 5. generate json for pose-estimation + run pose
     if args.pipeline['pose'] and success:
@@ -338,7 +315,6 @@ def soccer_net_pipeline(args):
                 print(e)
                 success = False
             print("Done generating json for pose")
-
             if success:
                 print("Detecting pose")
                 pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
@@ -359,7 +335,6 @@ def soccer_net_pipeline(args):
                     ], cwd=_project_root)
                 print("Done detecting pose")
 
-
     # 6. generate cropped images
     if args.pipeline['crops'] and success:
         crops_destination_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'], 'imgs')
@@ -377,7 +352,6 @@ def soccer_net_pipeline(args):
                 print(e)
                 success = False
             print("Done generating crops")
-
     str_result_file = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                    config.dataset['SoccerNet'][args.part]['jersey_id_result'])
     # 7. run STR system on all crops
@@ -393,9 +367,7 @@ def soccer_net_pipeline(args):
                 '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
             ], cwd=_project_root)
             print("Done predict numbers")
-
     final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
-
     # 8. combine tracklet results
     analysis_results = None  # Initialize to avoid UnboundLocalError when skipped
     if args.pipeline['combine'] and success:
@@ -404,13 +376,15 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, useBias=True)
-
+            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(
+                str_result_file,
+                raw_legibility_path=raw_legibile_path,
+                filtered_results_path=gauss_filtered_path,
+                useBias=True
+            )
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
-
             with open(final_results_path, 'w') as f:
                 json.dump(consolidated_dict, f)
-
     # 9. evaluate accuracy
     if args.pipeline['eval'] and success:
         if consolidated_dict is None:
@@ -421,14 +395,12 @@ def soccer_net_pipeline(args):
         print(len(consolidated_dict.keys()), len(gt_dict.keys()))
         helpers.evaluate_results(consolidated_dict, gt_dict, full_results = analysis_results)
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset', help="Options: 'SoccerNet', 'Hockey'")
     parser.add_argument('part', help="Options: 'test', 'val', 'train', 'challenge")
     parser.add_argument('--train_str', action='store_true', default=False, help="Run training of jersey number recognition")
     args = parser.parse_args()
-
     if not args.train_str:
         if args.dataset == 'SoccerNet':
             actions = {"soccer_ball_filter": True,
@@ -452,5 +424,3 @@ if __name__ == '__main__':
             print("Unknown dataset")
     else:
         train_parseq(args)
-
-
