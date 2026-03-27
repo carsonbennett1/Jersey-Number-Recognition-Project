@@ -253,6 +253,9 @@ def soccer_net_pipeline(args):
 
     gauss_filtered_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                        config.dataset['SoccerNet'][args.part]['gauss_filtered'])
+    
+    raw_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
+                                     config.dataset['SoccerNet'][args.part]['raw_legible_result'])
 
     # 1. Filter out soccer ball based on images size
     if args.pipeline['soccer_ball_filter']:
@@ -404,7 +407,7 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, useBias=True)
+            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, raw_legibility_path=raw_legibile_path, filtered_results_path=gauss_filtered_path, useBias=True)
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 

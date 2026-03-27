@@ -429,38 +429,40 @@ def candidate_and_frame_processing(confidence_values, tracklet):
     L = 4
     e = 1e-9
     qt = np.array(tracklet)
+    if len(qt) == 0 or len(confidence_values) == 0:
+        return 0, 0
 
     columns = confidence_values.shape[1]
     all_score_k_values = []
 
     for i in range(columns):
-        frame_values = []  # contain scores
+        frame_values = []
         for j in range(len(confidence_values)):
-            vt_k = qt[j] * (np.log(confidence_values[j][i]) + e)
+            vt_k = qt[j] * np.log(confidence_values[j][i] + e)
             frame_values.append(vt_k)
         
         s_k = np.argsort(frame_values)
         s_k_top_L = s_k[-L:]
         
-        top_L_indices = []  # contain indices
+        top_L_indices = []
         for k in range(len(s_k_top_L)):
-            top_L_indices.append(frame_values[s_k_top_L[k]])  # append actual values for position k
+            top_L_indices.append(frame_values[s_k_top_L[k]])
 
         score_k = np.sum(top_L_indices)
         all_score_k_values.append(score_k)
     
     k_hat = np.argmax(all_score_k_values)
-    return k_hat
+    return k_hat, all_score_k_values[k_hat]
 
 def predict_jersey_number_top_L(image_predictions, tracklet, bias=False):
     tens_priors, unit_priors = initialize_priors(bias)
     tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
 
-    tens_scores = candidate_and_frame_processing(tens_likelihood, tracklet)
-    unit_scores = candidate_and_frame_processing(unit_likelihood, tracklet)
+    tens_scores, tens_confidence = candidate_and_frame_processing(tens_likelihood, tracklet)
+    unit_scores, units_confidence = candidate_and_frame_processing(unit_likelihood, tracklet)
 
     batch_tokens = token_list[tens_scores] + token_list[unit_scores]
-    batch_probs = [tens_scores, unit_scores]
+    batch_probs = [tens_confidence, units_confidence]
     for i in range(2):
         if batch_tokens[i] == 'E':
             batch_tokens = batch_tokens[:i]
@@ -469,43 +471,100 @@ def predict_jersey_number_top_L(image_predictions, tracklet, bias=False):
 
     return batch_tokens, batch_probs
 
-def process_jersey_id_predictions_top_L(file_path, useBias = False):
-    legibility_tracklet = None
-    try:
-        with open("./out/SoccerNetResults/raw_legible_result.json") as legibility_file: # file location main change on initial pipeline run
-            data = json.load(legibility_file)
+def frame_sort_key(frame_name):
+    stem = os.path.splitext(frame_name)[0]
+    if stem.isdigit():
+        return int(stem) 
+    else:
+        return stem
 
+def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered_results_path=None, useBias=False):
+    legibility_values = None
+    filtered_results = None
+
+    try:
+        with open(raw_legibility_path, "r", encoding="utf-8") as legibility_file:
+            legibility_values = json.load(legibility_file)
     except FileNotFoundError:
-        print("Raw legibility results file could not be found")
+        print("Raw legibility results could not be loaded")
         return
+    
+    if filtered_results_path is not None:
+        try:
+            with open(filtered_results_path) as filtered_file:
+                filtered_results = json.load(filtered_file)
+        except FileNotFoundError:
+            print("Filtered results file could not be loaded")
+            return
 
     all_results = {}
+    all_frame_names = {}
     final_results = {}
     with open(file_path, 'r') as f:
         results_dict = json.load(f)
     for name in results_dict.keys():
-        tmp = name.split('_')
+        tmp = name.split('_', 1)
         tracklet = tmp[0]
+        if len(tmp) > 1:
+            frame_name = tmp[1] 
+        else:
+            frame_name = ""
 
         if tracklet not in all_results:
             all_results[tracklet] = []
-            final_results[tracklet] = -1  # default
-        raw_result = results_dict[name]['logits']
-        raw_result = apply_ts(raw_result)
+            all_frame_names[tracklet] = []
+            final_results[tracklet] = -1
+        raw_result = results_dict[name]['raw']
+        raw_result = np.array([np.array(xi) for xi in raw_result])
 
         all_results[tracklet].append(raw_result)
+        all_frame_names[tracklet].append(frame_name)
 
     final_full_results = {}
     for tracklet in all_results.keys():
         if len(all_results[tracklet]) == 0:
             continue
-        results = np.array(all_results[tracklet])
+        
+        paired = []
+        for i in range(len(all_frame_names[tracklet])):
+            frame_name = all_frame_names[tracklet][i]
+            output_result = all_results[tracklet][i]
+            paired.append((frame_name, output_result))
+        
+        sort_keys = [frame_sort_key(x[0]) for x in paired]
+        sorted_indices = np.argsort(sort_keys)
+        
+        ordered_frame_names = []
+        ordered_results = []
+        for i in sorted_indices:
+            ordered_frame_names.append(paired[i][0])
+            ordered_results.append(paired[i][1])
+
+        results = np.array(ordered_results)
 
         try:
-            legibility_tracklet = data[tracklet]  # get exact tracklet name
+            raw_tracklet_scores = legibility_values[tracklet]
         except:
             print(f"Couldin't find tracklet name in JSON raw legibility for {tracklet}")
             continue
+
+        if filtered_results is not None and tracklet in filtered_results:
+            frame_to_score = {}
+            filtered_frames = filtered_results[tracklet]
+            for idx in range(len(filtered_frames)):
+                if idx < len(raw_tracklet_scores):
+                    frame_name = filtered_frames[idx]
+                    score = raw_tracklet_scores[idx]
+                    frame_to_score[frame_name] = score
+
+            legibility_tracklet = []
+            for frame in ordered_frame_names:
+                if frame in frame_to_score:
+                    legibility_tracklet.append(frame_to_score[frame])
+                else:
+                    legibility_tracklet.append(0.0)
+        else:
+            legibility_tracklet = list(raw_tracklet_scores)
 
         best_prediction, probs = predict_jersey_number_top_L(results, legibility_tracklet, bias=useBias)
 
