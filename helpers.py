@@ -426,7 +426,7 @@ def predict_jersey_number(image_predictions, useBias=False):
     return batch_tokens, batch_probs
 
 def candidate_and_frame_processing(confidence_values, tracklet):
-    L = 10
+    L = 7
     e = 1e-9
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
@@ -513,9 +513,6 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
             frame_name = tmp[1] 
         else:
             frame_name = ""
-            no_frame_name+=1
-
-        frame_name_total+=1
 
         if tracklet not in all_results:
             all_results[tracklet] = []
@@ -566,25 +563,25 @@ def process_jersey_id_predictions_top_L(file_path, raw_legibility_path, filtered
                     frame_name = filtered_frames[idx].split("_", 1)[1]
                     score = raw_tracklet_scores[idx]
                     frame_to_score[frame_name] = score
-                else:
-                    no_frame_to_score_map+=1
-                frame_to_score_total+=1
 
             for frame in ordered_frame_names:
                 if frame in frame_to_score:
                     legibility_tracklet.append(frame_to_score[frame])
                 else:
                     legibility_tracklet.append(0.0)
-                    frame_to_score_mismatch+=1
-                frame_to_score_total+=1
-
         else:
             legibility_tracklet = list(raw_tracklet_scores)
 
         best_prediction, probs = predict_jersey_number_top_L(results, legibility_tracklet, bias=useBias)
 
-        final_results[tracklet] = str(int(best_prediction))
-        final_full_results[tracklet] = {'label': str(int(best_prediction)), 'unique': [], 'weights': probs}
+        label = ""
+        try:
+            label = str(int(best_prediction))
+        except (TypeError, ValueError):
+            label = "-1"
+
+        final_results[tracklet] = label
+        final_full_results[tracklet] = {'label': label, 'unique': [], 'weights': probs}
     
     return final_results, final_full_results
 
