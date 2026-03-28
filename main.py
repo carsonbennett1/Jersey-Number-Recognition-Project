@@ -380,7 +380,7 @@ def soccer_net_pipeline(args):
                 str_result_file,
                 raw_legibility_path=raw_legibile_path,
                 filtered_results_path=gauss_filtered_path,
-                useBias=True
+                L=args.top_l,
             )
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
             with open(final_results_path, 'w') as f:
@@ -392,7 +392,6 @@ def soccer_net_pipeline(args):
                 consolidated_dict = json.load(f)
         with open(gt_path, 'r') as gf:
             gt_dict = json.load(gf)
-        print(len(consolidated_dict.keys()), len(gt_dict.keys()))
         helpers.evaluate_results(consolidated_dict, gt_dict, full_results = analysis_results)
 
 if __name__ == '__main__':
@@ -400,6 +399,13 @@ if __name__ == '__main__':
     parser.add_argument('dataset', help="Options: 'SoccerNet', 'Hockey'")
     parser.add_argument('part', help="Options: 'test', 'val', 'train', 'challenge")
     parser.add_argument('--train_str', action='store_true', default=False, help="Run training of jersey number recognition")
+    parser.add_argument(
+        '--top_l',
+        type=int,
+        default=16,
+        metavar='L',
+        help='Top-L combine: number of highest-scoring frames summed per candidate jersey number (1–99)',
+    )
     args = parser.parse_args()
     if not args.train_str:
         if args.dataset == 'SoccerNet':

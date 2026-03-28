@@ -327,6 +327,7 @@ def initialize_priors(useBias, num_digits=11):
         return np.full(num_digits, 1.0 / num_digits), np.full(num_digits, 1.0 / num_digits)
     else:
         return np.full(num_digits, 1.0 / num_digits), np.array(bias_for_digits)
+
 def update_posteriors(priors, likelihoods):
     """ Update posterior probabilities based on the likelihoods (model outputs). """
     tens_priors, units_priors = priors
@@ -377,7 +378,7 @@ def predict_jersey_number(image_predictions, useBias=False):
             batch_probs = batch_probs[:i]
             break
     return batch_tokens, batch_probs
-def top_l_candidate_score(candidate_probs, tracklet, L=16, eps=1e-9):
+def top_l_candidate_score(candidate_probs, tracklet, L, eps=1e-9):
     """
     Score all jersey-number candidates (1 to 99) for one tracklet using Top-L.
     For each candidate jersey number, this function:
@@ -408,58 +409,9 @@ def top_l_candidate_score(candidate_probs, tracklet, L=16, eps=1e-9):
     best_k = best_idx + 1               # 1..99
     return best_k, scores[best_idx], scores
 
-def build_candidate_probs_1_to_99(tens_likelihood, unit_likelihood):
-    """
-    Build full jersey-number probabilities (1 to 99) from tens and units probabilities.
-    This function takes the model's tens and units outputs and combines them into
-    probabilities for full jersey numbers.
-    Examples:
-    - 7 is treated as (E, 7)
-    - 42 is treated as (4, 2)
-    The probability of a full number is computed by multiplying the matching
-    tens and units probabilities.
-    Returns:
-        Array [T(num frames), 99] where each row is one frame and each
-        column is the probability of jersey number k for that frame.
-    """
-    T = tens_likelihood.shape[0]
-    out = np.zeros((T, 99), dtype=float)
-    # token index mapping: E->0, digit d->d+1
-    for k in range(1, 100):
-        if k < 10:
-            tens_idx = 0          # E
-            unit_idx = k + 1      # digit k
-        else:
-            tens_digit = k // 10
-            unit_digit = k % 10
-            tens_idx = tens_digit + 1
-            unit_idx = unit_digit + 1
-        out[:, k - 1] = tens_likelihood[:, tens_idx] * unit_likelihood[:, unit_idx]
-    return out
-
-def predict_jersey_number_top_L(image_predictions, tracklet, bias=False, L=16):
-    """
-    Predict the final jersey number for one tracklet using Top-L.
-    This function:
-        1. gets tens and units probabilities from the frame predictions
-        2. builds full-number probabilities for jersey numbers 1..99
-        3. applies Top-L scoring
-        4. returns the best jersey number / best score 
-    """
-    tens_priors, unit_priors = initialize_priors(bias)
-    tens_likelihood, unit_likelihood = split_predictions_by_digit(image_predictions, priors=(tens_priors, unit_priors))
-    candidate_probs = build_candidate_probs_1_to_99(tens_likelihood, unit_likelihood)
+def predict_jersey_number_top_L_from_candidate_probs(candidate_probs, tracklet, L):
+    """Top-L over per-frame P_t(k) for k=1..99 and legibility weights q_t."""
     best_k, best_score, _ = top_l_candidate_score(candidate_probs, tracklet, L=L)
-    return str(best_k), [best_score]
-def predict_jersey_number_top_L_from_candidate_probs(candidate_probs, tracklet, L=16, return_scores=False):
-    """
-    Predict jersey number for one tracklet using Top-L, given per-frame P_t(k).
-    candidate_probs: np.ndarray shape [T, 99] where column (k-1) is P_t(k) for k=1..99
-    tracklet: list/array of q_t legibility weights
-    """
-    best_k, best_score, all_scores = top_l_candidate_score(candidate_probs, tracklet, L=L)
-    if return_scores:
-        return str(best_k), [best_score], all_scores
     return str(best_k), [best_score]
 def _frame_sort_key(frame_name):
     """
@@ -496,21 +448,12 @@ def process_jersey_id_predictions_top_L(
     file_path,
     raw_legibility_path,
     filtered_results_path=None,
-    useBias=False,
-    L=4,
+    L=16,
 ):
     """
     Process all jersey-id predictions using the Top-L combine method.
-    This function loads frame-level STR predictions and raw legibility scores,
-    groups predictions by tracklet, matches each frame with its legibility score,
-    and predicts one final jersey number per tracklet.
-    It also applies simple illegible checks and returns both simple and detailed
-    results.
-    Returns:
-        Final predicted label for each tracklet.
-        Detailed result info for each tracklet.
+    L is the number of highest-scoring frames summed per candidate (from main: --top_l).
     """
-    TOP_L_VALUE = 16
     TOP_L_ILLEGIBLE_QT_MAX_THRESHOLD = 0.5
     TOP_L_ILLEGIBLE_SCORE_THRESHOLD = -5.0
     eps = 1e-9
@@ -592,7 +535,7 @@ def process_jersey_id_predictions_top_L(
             if len(legibility_tracklet) < len(ordered_frame_names):
                 legibility_tracklet += [0.0] * (len(ordered_frame_names) - len(legibility_tracklet))
         best_prediction, probs = predict_jersey_number_top_L_from_candidate_probs(
-            candidate_probs, legibility_tracklet, L=TOP_L_VALUE
+            candidate_probs, legibility_tracklet, L
         )
         max_qt = float(np.max(legibility_tracklet)) if len(legibility_tracklet) > 0 else 0.0
         best_score = float(probs[0]) if (probs is not None and len(probs) > 0) else float("-inf")
