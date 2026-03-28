@@ -147,6 +147,6 @@ python oracle_max_after_stage6.py --part test --working-dir out/pipeline_runs/ap
 ## 9. Known rough edges
 
 - **`main.py`** still prints **“Done training”** even if the subprocess fails; check the exit code / traceback in the terminal.
-- **`trainer.val_check_interval=1`** (from `train_parseq`) validates **every batch**, which is very slow; consider loosening that in `main.py` once training is stable.
+- **`trainer.val_check_interval=1.0`** (float, from `train_parseq` / sweep): validate **once per epoch**. An integer `1` would mean **every batch** and is very slow.
 
 If you merge this branch, reviewers can use this file as the single narrative for “what changed and why.”

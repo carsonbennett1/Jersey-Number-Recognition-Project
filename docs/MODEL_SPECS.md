@@ -98,7 +98,7 @@ Config source: `str/parseq/configs/model/parseq.yaml` and `str/parseq/configs/ma
 ```bash
 conda run -n parseq2 python train.py +experiment=parseq dataset=real \
   data.root_dir=<path_to_lmdb> trainer.max_epochs=25 trainer.devices=1 \
-  trainer.val_check_interval=1 data.batch_size=128 data.max_label_length=2
+  trainer.val_check_interval=1.0 data.batch_size=128 data.max_label_length=2
 ```
 
 ### PARSeq STR (Hockey)
@@ -106,7 +106,7 @@ conda run -n parseq2 python train.py +experiment=parseq dataset=real \
 ```bash
 conda run -n parseq2 python train.py +experiment=parseq dataset=real \
   data.root_dir=<path_to_jersey_numbers_lmdb> trainer.max_epochs=25 \
-  trainer.devices=1 trainer.val_check_interval=1 data.batch_size=128 \
+  trainer.devices=1 trainer.val_check_interval=1.0 data.batch_size=128 \
   data.max_label_length=2
 ```
 

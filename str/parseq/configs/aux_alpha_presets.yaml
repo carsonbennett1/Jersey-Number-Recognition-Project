@@ -1,0 +1,161 @@
+# Preset groups for model.aux_alpha_* when use_jersey_aux_heads is true (parseq-jersey-aux).
+# Override in Hydra, e.g.:
+#   python train.py +experiment=parseq-jersey-aux model.aux_alpha_full=0.35 ...
+# Or copy one row into str/parseq/configs/model/parseq.yaml for a fixed run.
+#
+# Scales: "low_aux" / "high_aux" multiply all four defaults together for weaker/stronger total aux vs PARSeq loss.
+
+presets:
+  
+
+  - id: 2
+    name: equal_quarters
+    aux_alpha_full: 0.25
+    aux_alpha_tens: 0.25
+    aux_alpha_units: 0.25
+    aux_alpha_count: 0.25
+    note: Equal weight on all four aux terms.
+
+  - id: 3
+    name: emphasize_full
+    aux_alpha_full: 0.4
+    aux_alpha_tens: 0.1
+    aux_alpha_units: 0.1
+    aux_alpha_count: 0.2
+    note: Stress full 0-99 classification vs digit decomposition.
+
+  - id: 4
+    name: emphasize_digits
+    aux_alpha_full: 0.15
+    aux_alpha_tens: 0.25
+    aux_alpha_units: 0.25
+    aux_alpha_count: 0.15
+    note: Stress tens/units heads relative to full and count.
+
+  - id: 5
+    name: emphasize_count
+    aux_alpha_full: 0.2
+    aux_alpha_tens: 0.15
+    aux_alpha_units: 0.15
+    aux_alpha_count: 0.35
+    note: Stress 1-digit vs 2-digit head.
+
+  - id: 6
+    name: low_aux_global
+    aux_alpha_full: 0.125
+    aux_alpha_tens: 0.075
+    aux_alpha_units: 0.075
+    aux_alpha_count: 0.1
+    note: Half of default scale; aux is a lighter regularizer.
+
+  - id: 7
+    name: high_aux_global
+    aux_alpha_full: 0.5
+    aux_alpha_tens: 0.3
+    aux_alpha_units: 0.3
+    aux_alpha_count: 0.4
+    note: Double default scale; stronger aux vs PARSeq (watch for dominance).
+
+  - id: 8
+    name: mild_full_dominant
+    aux_alpha_full: 0.35
+    aux_alpha_tens: 0.12
+    aux_alpha_units: 0.12
+    aux_alpha_count: 0.18
+    note: Slight boost to full vs defaults.
+
+  - id: 9
+    name: mild_digit_dominant
+    aux_alpha_full: 0.2
+    aux_alpha_tens: 0.2
+    aux_alpha_units: 0.2
+    aux_alpha_count: 0.18
+    note: Balanced bump to tens/units vs defaults.
+
+  - id: 10
+    name: units_heavy
+    aux_alpha_full: 0.2
+    aux_alpha_tens: 0.15
+    aux_alpha_units: 0.35
+    aux_alpha_count: 0.15
+    note: Emphasize units head (e.g. single-digit confusions).
+
+  - id: 11
+    name: tens_heavy
+    aux_alpha_full: 0.2
+    aux_alpha_tens: 0.35
+    aux_alpha_units: 0.15
+    aux_alpha_count: 0.15
+    note: Emphasize tens digit.
+
+  - id: 12
+    name: full_and_count
+    aux_alpha_full: 0.35
+    aux_alpha_tens: 0.12
+    aux_alpha_units: 0.12
+    aux_alpha_count: 0.3
+    note: Full-number + length without heavy tens/units.
+
+  - id: 13
+    name: parseq_forward_only_aux
+    aux_alpha_full: 0.3
+    aux_alpha_tens: 0.2
+    aux_alpha_units: 0.2
+    aux_alpha_count: 0.15
+    note: Slightly reduce count weight vs default.
+
+  - id: 14
+    name: tiny_aux
+    aux_alpha_full: 0.05
+    aux_alpha_tens: 0.05
+    aux_alpha_units: 0.05
+    aux_alpha_count: 0.05
+    note: Minimal aux (ablation toward vanilla PARSeq within aux experiment).
+
+  - id: 15
+    name: strong_aux_balanced
+    aux_alpha_full: 0.3
+    aux_alpha_tens: 0.2
+    aux_alpha_units: 0.2
+    aux_alpha_count: 0.25
+    note: Moderately higher than default, balanced shape.
+
+  - id: 16
+    name: full_tens_focus
+    aux_alpha_full: 0.35
+    aux_alpha_tens: 0.3
+    aux_alpha_units: 0.1
+    aux_alpha_count: 0.15
+    note: Full + tens; light units/count.
+
+  - id: 17
+    name: decomposition_focus
+    aux_alpha_full: 0.15
+    aux_alpha_tens: 0.25
+    aux_alpha_units: 0.25
+    aux_alpha_count: 0.25
+    note: Decompose into tens/units/count; weaker full head.
+
+  - id: 18
+    name: soft_default
+    aux_alpha_full: 0.22
+    aux_alpha_tens: 0.14
+    aux_alpha_units: 0.14
+    aux_alpha_count: 0.18
+    note: Near-default with ~10% softer aux.
+
+  - id: 19
+    name: firm_default
+    aux_alpha_full: 0.28
+    aux_alpha_tens: 0.16
+    aux_alpha_units: 0.16
+    aux_alpha_count: 0.22
+    note: Near-default with ~10% stronger aux.
+
+  - id: 20
+    name: count_and_units
+    aux_alpha_full: 0.2
+    aux_alpha_tens: 0.15
+    aux_alpha_units: 0.3
+    aux_alpha_count: 0.3
+    note: Emphasize units + digit-count for two-digit cases.

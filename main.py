@@ -291,7 +291,8 @@ def train_parseq(args):
         config.str_python, 'train.py',
         f'+experiment={experiment}', 'dataset=real', f'data.root_dir={data_root}',
         'trainer.max_epochs=25', 'pretrained=parseq', 'trainer.devices=1',
-        'trainer.val_check_interval=1', 'data.batch_size=128', 'data.max_label_length=2'
+        # float 1.0 = validate once per epoch; int 1 would validate after every batch (very slow)
+        'trainer.val_check_interval=1.0', 'data.batch_size=128', 'data.max_label_length=2'
     ], cwd=parseq_dir)
     print("Done training")
 

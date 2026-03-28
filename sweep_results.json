@@ -1,0 +1,304 @@
+{
+  "presets": {
+    "2": {
+      "name": "equal_quarters",
+      "alphas": {
+        "full": 0.25,
+        "tens": 0.25,
+        "units": 0.25,
+        "count": 0.25
+      },
+      "run_dir": "2026-03-27_05-14-30",
+      "best_val_accuracy": 95.467,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-14-30\\checkpoints\\epoch=22-step=2369-val_accuracy=95.4670-val_NED=96.4286.ckpt"
+    },
+    "3": {
+      "name": "emphasize_full",
+      "alphas": {
+        "full": 0.4,
+        "tens": 0.1,
+        "units": 0.1,
+        "count": 0.2
+      },
+      "run_dir": "2026-03-27_05-23-58",
+      "best_val_accuracy": 96.0165,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-23-58\\checkpoints\\epoch=24-step=2575-val_accuracy=96.0165-val_NED=96.6690.ckpt"
+    },
+    "4": {
+      "name": "emphasize_digits",
+      "alphas": {
+        "full": 0.15,
+        "tens": 0.25,
+        "units": 0.25,
+        "count": 0.15
+      },
+      "run_dir": "2026-03-27_05-33-40",
+      "best_val_accuracy": 95.7418,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-33-40\\checkpoints\\epoch=19-step=2060-val_accuracy=95.7418-val_NED=96.6346.ckpt"
+    },
+    "5": {
+      "name": "emphasize_count",
+      "alphas": {
+        "full": 0.2,
+        "tens": 0.15,
+        "units": 0.15,
+        "count": 0.35
+      },
+      "run_dir": "2026-03-27_05-43-11",
+      "best_val_accuracy": 95.3297,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-43-11\\checkpoints\\epoch=15-step=1648-val_accuracy=95.3297-val_NED=96.2569.ckpt"
+    },
+    "6": {
+      "name": "low_aux_global",
+      "alphas": {
+        "full": 0.125,
+        "tens": 0.075,
+        "units": 0.075,
+        "count": 0.1
+      },
+      "run_dir": "2026-03-27_05-52-50",
+      "best_val_accuracy": 95.5357,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-52-50\\checkpoints\\epoch=9-step=1030-val_accuracy=95.5357-val_NED=96.3599.ckpt"
+    },
+    "7": {
+      "name": "high_aux_global",
+      "alphas": {
+        "full": 0.5,
+        "tens": 0.3,
+        "units": 0.3,
+        "count": 0.4
+      },
+      "run_dir": "2026-03-27_06-02-24",
+      "best_val_accuracy": 95.6044,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-02-24\\checkpoints\\epoch=13-step=1442-val_accuracy=95.6044-val_NED=96.4629.ckpt"
+    },
+    "8": {
+      "name": "mild_full_dominant",
+      "alphas": {
+        "full": 0.35,
+        "tens": 0.12,
+        "units": 0.12,
+        "count": 0.18
+      },
+      "run_dir": "2026-03-27_06-12-07",
+      "best_val_accuracy": 95.6731,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-12-07\\checkpoints\\epoch=24-step=2575-val_accuracy=95.6731-val_NED=96.3255.ckpt"
+    },
+    "9": {
+      "name": "mild_digit_dominant",
+      "alphas": {
+        "full": 0.2,
+        "tens": 0.2,
+        "units": 0.2,
+        "count": 0.18
+      },
+      "run_dir": "2026-03-27_06-21-50",
+      "best_val_accuracy": 95.6044,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-21-50\\checkpoints\\epoch=16-step=1751-val_accuracy=95.6044-val_NED=96.4629.ckpt"
+    },
+    "10": {
+      "name": "units_heavy",
+      "alphas": {
+        "full": 0.2,
+        "tens": 0.15,
+        "units": 0.35,
+        "count": 0.15
+      },
+      "run_dir": "2026-03-27_06-31-12",
+      "best_val_accuracy": 95.467,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-31-12\\checkpoints\\epoch=21-step=2266-val_accuracy=95.4670-val_NED=96.3599.ckpt"
+    },
+    "11": {
+      "name": "tens_heavy",
+      "alphas": {
+        "full": 0.2,
+        "tens": 0.35,
+        "units": 0.15,
+        "count": 0.15
+      },
+      "run_dir": "2026-03-27_06-40-43",
+      "best_val_accuracy": 95.467,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-40-43\\checkpoints\\epoch=24-step=2575-val_accuracy=95.4670-val_NED=96.4286.ckpt"
+    },
+    "12": {
+      "name": "full_and_count",
+      "alphas": {
+        "full": 0.35,
+        "tens": 0.12,
+        "units": 0.12,
+        "count": 0.3
+      },
+      "run_dir": "2026-03-27_06-50-30",
+      "best_val_accuracy": 95.5357,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_06-50-30\\checkpoints\\epoch=11-step=1236-val_accuracy=95.5357-val_NED=96.3942.ckpt"
+    },
+    "13": {
+      "name": "parseq_forward_only_aux",
+      "alphas": {
+        "full": 0.3,
+        "tens": 0.2,
+        "units": 0.2,
+        "count": 0.15
+      },
+      "run_dir": "2026-03-27_07-00-46",
+      "best_val_accuracy": 95.467,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-00-46\\checkpoints\\epoch=18-step=1957-val_accuracy=95.4670-val_NED=96.4629.ckpt"
+    },
+    "14": {
+      "name": "tiny_aux",
+      "alphas": {
+        "full": 0.05,
+        "tens": 0.05,
+        "units": 0.05,
+        "count": 0.05
+      },
+      "run_dir": "2026-03-27_07-11-01",
+      "best_val_accuracy": 95.6731,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-11-01\\checkpoints\\epoch=23-step=2472-val_accuracy=95.6731-val_NED=96.3599.ckpt"
+    },
+    "15": {
+      "name": "strong_aux_balanced",
+      "alphas": {
+        "full": 0.3,
+        "tens": 0.2,
+        "units": 0.2,
+        "count": 0.25
+      },
+      "run_dir": "2026-03-27_07-21-16",
+      "best_val_accuracy": 95.467,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-21-16\\checkpoints\\epoch=21-step=2266-val_accuracy=95.4670-val_NED=96.3599.ckpt"
+    },
+    "16": {
+      "name": "full_tens_focus",
+      "alphas": {
+        "full": 0.35,
+        "tens": 0.3,
+        "units": 0.1,
+        "count": 0.15
+      },
+      "run_dir": "2026-03-27_07-31-36",
+      "best_val_accuracy": 95.3984,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-31-36\\checkpoints\\epoch=19-step=2060-val_accuracy=95.3984-val_NED=96.1538.ckpt"
+    },
+    "17": {
+      "name": "decomposition_focus",
+      "alphas": {
+        "full": 0.15,
+        "tens": 0.25,
+        "units": 0.25,
+        "count": 0.25
+      },
+      "run_dir": "2026-03-27_07-41-42",
+      "best_val_accuracy": 95.6044,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-41-42\\checkpoints\\epoch=15-step=1648-val_accuracy=95.6044-val_NED=96.5316.ckpt"
+    },
+    "18": {
+      "name": "soft_default",
+      "alphas": {
+        "full": 0.22,
+        "tens": 0.14,
+        "units": 0.14,
+        "count": 0.18
+      },
+      "run_dir": "2026-03-27_07-51-48",
+      "best_val_accuracy": 95.7418,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_07-51-48\\checkpoints\\epoch=15-step=1648-val_accuracy=95.7418-val_NED=96.6003.ckpt"
+    },
+    "19": {
+      "name": "firm_default",
+      "alphas": {
+        "full": 0.28,
+        "tens": 0.16,
+        "units": 0.16,
+        "count": 0.22
+      },
+      "run_dir": "2026-03-27_08-01-25",
+      "best_val_accuracy": 95.8791,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_08-01-25\\checkpoints\\epoch=21-step=2266-val_accuracy=95.8791-val_NED=96.7033.ckpt"
+    },
+    "20": {
+      "name": "count_and_units",
+      "alphas": {
+        "full": 0.2,
+        "tens": 0.15,
+        "units": 0.3,
+        "count": 0.3
+      },
+      "run_dir": "2026-03-27_08-12-10",
+      "best_val_accuracy": 95.261,
+      "best_checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_08-12-10\\checkpoints\\epoch=18-step=1957-val_accuracy=95.2610-val_NED=96.1882.ckpt"
+    }
+  },
+  "global_top_5": [
+    {
+      "rank": 1,
+      "preset_id": 3,
+      "preset_name": "emphasize_full",
+      "val_accuracy": 96.0165,
+      "epoch": 24,
+      "checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-23-58\\checkpoints\\epoch=24-step=2575-val_accuracy=96.0165-val_NED=96.6690.ckpt",
+      "alphas": {
+        "full": 0.4,
+        "tens": 0.1,
+        "units": 0.1,
+        "count": 0.2
+      }
+    },
+    {
+      "rank": 2,
+      "preset_id": 19,
+      "preset_name": "firm_default",
+      "val_accuracy": 95.8791,
+      "epoch": 21,
+      "checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_08-01-25\\checkpoints\\epoch=21-step=2266-val_accuracy=95.8791-val_NED=96.7033.ckpt",
+      "alphas": {
+        "full": 0.28,
+        "tens": 0.16,
+        "units": 0.16,
+        "count": 0.22
+      }
+    },
+    {
+      "rank": 3,
+      "preset_id": 19,
+      "preset_name": "firm_default",
+      "val_accuracy": 95.8791,
+      "epoch": 23,
+      "checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_08-01-25\\checkpoints\\epoch=23-step=2472-val_accuracy=95.8791-val_NED=96.6346.ckpt",
+      "alphas": {
+        "full": 0.28,
+        "tens": 0.16,
+        "units": 0.16,
+        "count": 0.22
+      }
+    },
+    {
+      "rank": 4,
+      "preset_id": 3,
+      "preset_name": "emphasize_full",
+      "val_accuracy": 95.8104,
+      "epoch": 17,
+      "checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-23-58\\checkpoints\\epoch=17-step=1854-val_accuracy=95.8104-val_NED=96.6003.ckpt",
+      "alphas": {
+        "full": 0.4,
+        "tens": 0.1,
+        "units": 0.1,
+        "count": 0.2
+      }
+    },
+    {
+      "rank": 5,
+      "preset_id": 3,
+      "preset_name": "emphasize_full",
+      "val_accuracy": 95.8104,
+      "epoch": 21,
+      "checkpoint": "C:\\Users\\aakas\\uni\\deep-lraening\\project\\Jersey-Number-Recognition-Project\\str\\parseq\\outputs\\parseq\\2026-03-27_05-23-58\\checkpoints\\epoch=21-step=2266-val_accuracy=95.8104-val_NED=96.6346.ckpt",
+      "alphas": {
+        "full": 0.4,
+        "tens": 0.1,
+        "units": 0.1,
+        "count": 0.2
+      }
+    }
+  ]
+}
