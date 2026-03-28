@@ -244,8 +244,8 @@ def get_bias(value):
     else:
         return 0.39
 
-SUM_THRESHOLD = 1
-FILTER_THRESHOLD = 0.2
+SUM_THRESHOLD = 3.0
+FILTER_THRESHOLD = 0.35
 def find_best_prediction(results, useBias=False):
     if FILTER_THRESHOLD > 0:
         for entry in results:
