@@ -12,6 +12,7 @@ import random
 import shutil
 from pathlib import Path
 from scipy.special import softmax as softmax
+import math
 
 json_img_template = { "id": 0,
             "file_name": "",
@@ -428,6 +429,7 @@ def predict_jersey_number(image_predictions, useBias=False):
 def candidate_and_frame_processing(confidence_values, tracklet):
     L = 7
     e = 1e-9
+    percentage_frames_keep = 0.3
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
         return 0, 0
@@ -437,6 +439,10 @@ def candidate_and_frame_processing(confidence_values, tracklet):
 
     for i in range(columns):
         frame_values = []
+        # variable L --> now accomodates for different size frames and takes the top 1/3 of frames as top L
+        frame_count = len(confidence_values)
+        L = frame_count * percentage_frames_keep
+        L = max(1, L)
         for j in range(len(confidence_values)):
             vt_k = qt[j] * np.log(confidence_values[j][i] + e)
             frame_values.append(vt_k)
