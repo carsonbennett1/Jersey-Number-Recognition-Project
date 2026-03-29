@@ -429,7 +429,7 @@ def predict_jersey_number(image_predictions, useBias=False):
 
 def candidate_and_frame_processing(confidence_values, tracklet):
     e = 1e-9
-    percentage_frames_keep = 0.3
+    percentage_frames_keep = .7    # percentage of frames to keep for top L
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
         return 0, 0
@@ -816,7 +816,7 @@ def evaluate_results(consolidated_dict, gt_dict, full_results=None):
     # (i) Including illegible as a class (-1)
     correct_all = sum(g == p for g, p in zip(y_true, y_pred))
     print("\nRecognition Metrics — Including Illegible as a Class (-1)")
-    print(f"Top-1 Accuracy (Overall): {correct_all}/{len(y_true)} = {100 * correct_all / len(y_true):.2f}%")
+    print(f"Top-1 Accuracy (Overall): {correct_all}/{len(y_true)} = {100 * correct_all / len(y_true)}%")
     print("Precision / Recall / F1-score:")
     print(classification_report(y_true, y_pred, zero_division=0))
 
@@ -827,7 +827,7 @@ def evaluate_results(consolidated_dict, gt_dict, full_results=None):
     correct_leg = sum(g == p for g, p in pairs_leg)
 
     print("\nRecognition Metrics — Legible-Only Tracklets")
-    print(f"Top-1 Accuracy (Legible-Only): {correct_leg}/{len(pairs_leg)} = {100 * correct_leg / len(pairs_leg):.2f}%")
+    print(f"Top-1 Accuracy (Legible-Only): {correct_leg}/{len(pairs_leg)} = {100 * correct_leg / len(pairs_leg)}%")
     print("Precision / Recall / F1-score:")
     print(classification_report(y_true_leg, y_pred_leg, zero_division=0))
 
