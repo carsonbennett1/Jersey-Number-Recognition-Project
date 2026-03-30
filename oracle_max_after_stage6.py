@@ -4,7 +4,8 @@ Report oracle upper bounds after stage 6 (crops fixed): STR (stage 7) + combine 
 
 1) Perfect STR oracle: synthetic jersey_id_results where each crop predicts the GT number
    (when GT is a valid jersey label per helpers.is_valid_number), or omits crops when GT is -1.
-   Then runs the same process_jersey_id_predictions + consolidated_results as main.py.
+   Then runs the same combine as main.py (Top-L by default, or Bayesian with --combine-bayesian)
+   plus consolidated_results.
 
 2) Aggregation-only ceiling: fraction of tracklets where GT appears among at least one valid
    crop label in the current STR output (reweighting could in principle pick GT via find_best_prediction).
@@ -204,6 +205,12 @@ def main() -> None:
         default=None,
         help="Path to jersey_id_results JSON (default: <working-dir>/<part jersey_id_result>)",
     )
+    parser.add_argument(
+        "--combine-bayesian",
+        action="store_true",
+        default=False,
+        help="Use Bayesian combine like process_jersey_id_predictions (default: Top-L, same as main.py)",
+    )
     args = parser.parse_args()
 
     sn = config.dataset["SoccerNet"]
@@ -216,6 +223,8 @@ def main() -> None:
     illegible_path = os.path.join(working_dir, part_cfg["illegible_result"])
     soccer_ball_list = os.path.join(working_dir, part_cfg["soccer_ball_list"])
     jersey_path = args.jersey_id or os.path.join(working_dir, part_cfg["jersey_id_result"])
+    raw_legible_path = os.path.join(working_dir, part_cfg["raw_legible_result"])
+    gauss_filtered_path = os.path.join(working_dir, part_cfg["gauss_filtered"])
 
     if not os.path.isfile(jersey_path):
         print(f"ERROR: Missing jersey_id results: {jersey_path}")
@@ -249,7 +258,18 @@ def main() -> None:
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(perfect, f)
-        pred_from_process, _ = helpers.process_jersey_id_predictions(tmp_path, useBias=True)
+        if args.combine_bayesian:
+            pred_from_process, _ = helpers.process_jersey_id_predictions(tmp_path, useBias=True)
+        else:
+            if not os.path.isfile(raw_legible_path):
+                print(f"ERROR: Top-L combine needs raw legibility JSON: {raw_legible_path}")
+                sys.exit(1)
+            pred_from_process, _ = helpers.process_jersey_id_predictions_top_L(
+                tmp_path,
+                raw_legibility_path=raw_legible_path,
+                filtered_results_path=gauss_filtered_path,
+                useBias=True,
+            )
         consolidated = _consolidated_results(
             image_dir,
             pred_from_process,
@@ -257,9 +277,10 @@ def main() -> None:
             soccer_ball_list if os.path.isfile(soccer_ball_list) else None,
         )
         p_ok, p_tot, p_acc = _accuracy(consolidated, gt_dict)
+        combine_name = "process_jersey_id_predictions (Bayesian)" if args.combine_bayesian else "process_jersey_id_predictions_top_L"
         print(
-            "Perfect STR oracle (every crop predicts GT when GT is 1-99; GT=-1: no crop entries; "
-            "then process_jersey_id_predictions + consolidated_results as in main.py):"
+            f"Perfect STR oracle (every crop predicts GT when GT is 1-99; GT=-1: no crop entries; "
+            f"then {combine_name} + consolidated_results as in main.py):"
         )
         print(f"  Achievable tracklets: {p_ok} / {p_tot}  ({p_acc:.6f}%)")
     finally:

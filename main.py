@@ -27,12 +27,18 @@ def _run_cmd(args_list, cwd=None):
         print(f"ERROR: {e}")
         return False
 
-def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'gauss', exclude_balls=True):
+def get_soccer_net_legibility_results_with_raw(args, use_filtered=True, filter='gauss', exclude_balls=True,
+                                               legibility_threshold=0.5):
+    """One forward pass per image: save sigmoid scores (Top-L qt), legible paths, and illegible list.
+
+    Writes raw_legible_result, legible_result, and illegible_result under the SoccerNet working_dir.
+    """
     root_dir = config.dataset['SoccerNet']['root_dir']
     image_dir = config.dataset['SoccerNet'][args.part]['images']
     path_to_images = os.path.join(root_dir, image_dir)
     tracklets = list_dirs(path_to_images)
-    results_dict = {x:[] for x in tracklets}
+    results_raw = {x: [] for x in tracklets}
+    filtered = None
 
     if use_filtered:
         if filter == 'sim':
@@ -44,7 +50,6 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
         with open(path_to_filter_results, 'r') as f:
             filtered = json.load(f)
 
-
     if exclude_balls:
         updated_tracklets = []
         soccer_ball_list = os.path.join(config.dataset['SoccerNet']['working_dir'],
@@ -53,9 +58,16 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
             ball_json = json.load(f)
         ball_list = ball_json['ball_tracks']
         for track in tracklets:
-            if not track in ball_list:
+            if track not in ball_list:
                 updated_tracklets.append(track)
         tracklets = updated_tracklets
+
+    model_path = config.dataset['SoccerNet']['legibility_model']
+    model_arch = config.dataset['SoccerNet']['legibility_model_arch']
+    leg_model, leg_device = lc.load_legibility_model(model_path, arch=model_arch)
+
+    legible_tracklets = {}
+    illegible_tracklets = []
 
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
@@ -63,17 +75,34 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
             images = filtered[directory]
         else:
             images = os.listdir(track_dir)
-        #images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
-        track_results = lc.run(images_full_path, config.dataset['SoccerNet']['legibility_model'], threshold=-1, arch=config.dataset['SoccerNet']['legibility_model_arch'])
-        results_dict[directory] = track_results
+        track_results = lc.run(
+            images_full_path, model_path, arch=model_arch, threshold=-1,
+            model=leg_model, device=leg_device,
+        )
+        results_raw[directory] = track_results
+        scores = np.asarray(track_results, dtype=np.float64)
+        legible = np.nonzero(scores > legibility_threshold)[0]
+        if len(legible) == 0:
+            illegible_tracklets.append(directory)
+        else:
+            legible_tracklets[directory] = [images_full_path[i] for i in legible]
 
-    # save results
-    full_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['raw_legible_result'])
-    with open(full_legibile_path, "w") as outfile:
-        json.dump(results_dict, outfile)
+    working = config.dataset['SoccerNet']['working_dir']
+    part_cfg = config.dataset['SoccerNet'][args.part]
+    raw_path = os.path.join(working, part_cfg['raw_legible_result'])
+    with open(raw_path, 'w', encoding='utf-8') as outfile:
+        json.dump(results_raw, outfile)
 
-    return results_dict
+    full_legible_path = os.path.join(working, part_cfg['legible_result'])
+    with open(full_legible_path, 'w', encoding='utf-8') as outfile:
+        outfile.write(json.dumps(legible_tracklets, indent=4))
+
+    full_illegible_path = os.path.join(working, part_cfg['illegible_result'])
+    with open(full_illegible_path, 'w', encoding='utf-8') as outfile:
+        outfile.write(json.dumps({'illegible': illegible_tracklets}, indent=4))
+
+    return legible_tracklets, illegible_tracklets
 
 def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim', exclude_balls=True):
     root_dir = config.dataset['SoccerNet']['root_dir']
@@ -401,14 +430,16 @@ def soccer_net_pipeline(args):
 
     # 4. pass all images through legibility classifier and record results
     if args.pipeline['legible'] and success:
-        if _output_exists(full_legibile_path) and _output_exists(illegible_path):
+        if (_output_exists(full_legibile_path) and _output_exists(illegible_path)
+                and _output_exists(raw_legibile_path)):
             print("Classifying Legibility: SKIPPED (output exists)")
             with open(full_legibile_path, 'r') as f:
                 legible_dict = json.load(f)
         else:
             print("Classifying Legibility:")
             try:
-                legible_dict, illegible_tracklets = get_soccer_net_raw_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
+                legible_dict, illegible_tracklets = get_soccer_net_legibility_results_with_raw(
+                    args, use_filtered=True, filter='gauss', exclude_balls=True)
             except Exception as error:
                 print(f'Failed to run legibility classifier:{error}')
                 success = False
@@ -500,13 +531,22 @@ def soccer_net_pipeline(args):
                     os.path.join(_project_root, 'experiments', 'multitask_resnet34.pth'))
                 success = run_multitask_inference(crops_dir, str_result_file, multitask_model_path)
             else:
-                # Original PARSeq STR (subprocess in parseq2 env)
+                # Original PARSeq STR (subprocess; interpreter from configuration.str_python / JERSEY_STR_ENV)
                 print("Predict numbers (PARSeq)")
                 str_script = os.path.join(_project_root, 'str.py')
-                success = _run_cmd([
-                    config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
-                    '--data_root', crops_dir, '--inference', '--result_file', str_result_file
-                ], cwd=_project_root)
+                str_py = config.str_python
+                if not os.path.isfile(str_py):
+                    print(
+                        f"ERROR: STR interpreter not found: {str_py}\n"
+                        f"Install PARSeq deps in the '{config.str_env}' env or set JERSEY_STR_ENV, e.g. parseq2. "
+                        f"See README / python setup.py"
+                    )
+                    success = False
+                else:
+                    success = _run_cmd([
+                        str_py, str_script, config.dataset["SoccerNet"]["str_model"],
+                        '--data_root', crops_dir, '--inference', '--result_file', str_result_file
+                    ], cwd=_project_root)
             print("Done predict numbers")
 
     final_results_path = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['final_result'])
@@ -519,7 +559,16 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, raw_legibility_path=raw_legibile_path, filtered_results_path=gauss_filtered_path, useBias=True)
+            if args.pipeline.get('combine_bayesian'):
+                results_dict, analysis_results = helpers.process_jersey_id_predictions(
+                    str_result_file, useBias=True)
+            else:
+                results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(
+                    str_result_file,
+                    raw_legibility_path=raw_legibile_path,
+                    filtered_results_path=gauss_filtered_path,
+                    useBias=True,
+                )
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 
@@ -544,6 +593,8 @@ if __name__ == '__main__':
     parser.add_argument('--train_str', action='store_true', default=False, help="Run training of jersey number recognition")
     parser.add_argument('--jersey_aux_str', action='store_true', default=False,
                         help="With --train_str: enable PARSeq encoder multi-task aux loss (parseq-jersey-aux); inference still PARSeq decode")
+    parser.add_argument('--combine_bayesian', action='store_true', default=False,
+                        help="SoccerNet: use Bayesian combine instead of Top-L (default: Top-L + raw legibility)")
     args = parser.parse_args()
 
     if not args.train_str:
@@ -559,7 +610,8 @@ if __name__ == '__main__':
                        "combine": True,
                        "eval": True,
                        "use_multitask_classifier": False,
-                       "multitask_model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "experiments", "multitask_resnet34.pth")}
+                       "multitask_model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "experiments", "multitask_resnet34.pth"),
+                       "combine_bayesian": args.combine_bayesian}
             args.pipeline = actions
             soccer_net_pipeline(args)
         elif args.dataset == 'Hockey':

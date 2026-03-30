@@ -13,7 +13,6 @@ import shutil
 from pathlib import Path
 from scipy.special import softmax as softmax
 import math
-from sklearn.metrics import classification_report
 
 json_img_template = { "id": 0,
             "file_name": "",
@@ -429,7 +428,8 @@ def predict_jersey_number(image_predictions, useBias=False):
 
 def candidate_and_frame_processing(confidence_values, tracklet):
     e = 1e-9
-    percentage_frames_keep = .7    # percentage of frames to keep for top L
+    import configuration as _cfg
+    percentage_frames_keep = getattr(_cfg, 'top_l_frame_fraction', 0.7)
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
         return 0, 0
@@ -808,6 +808,8 @@ def evaluate_legibility(gt_path, illegible_path, legible_tracklets, soccer_ball_
     print(f"F1-score: {f1:.4f}")
 
 def evaluate_results(consolidated_dict, gt_dict, full_results=None):
+    from sklearn.metrics import classification_report
+
     y_true, y_pred = [], []
     for track_id in gt_dict.keys():
         y_true.append(int(gt_dict[track_id]))

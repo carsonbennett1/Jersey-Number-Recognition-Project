@@ -88,6 +88,9 @@ def load_from_checkpoint(checkpoint_path: str, **kwargs):
         model = create_model(model_id, True, **kwargs)
     else:
         ModelClass = _get_model_class(checkpoint_path)
+        # strict=False: jersey-aux and other fine-tunes may differ slightly from current module fields;
+        # matches train.py checkpoint handling; forward/decode weights still load for inference.
+        kwargs.setdefault('strict', False)
         model = ModelClass.load_from_checkpoint(checkpoint_path, **kwargs)
     return model
 

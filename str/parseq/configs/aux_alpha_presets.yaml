@@ -7,6 +7,13 @@
 
 presets:
   
+  - id: 1
+    name: default
+    aux_alpha_full: 0.25
+    aux_alpha_tens: 0.15
+    aux_alpha_units: 0.15
+    aux_alpha_count: 0.2
+    note: Default aux weights.
 
   - id: 2
     name: equal_quarters

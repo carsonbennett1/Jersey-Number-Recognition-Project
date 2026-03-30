@@ -52,6 +52,21 @@ str_env = os.environ.get('JERSEY_STR_ENV', 'jersey')
 str_python = _get_python_path(str_env)
 str_platform = 'cu113'
 
+
+def _top_l_frame_fraction_from_env():
+    """Fraction of frames per candidate kept in Top-L combine; see helpers.candidate_and_frame_processing."""
+    raw = os.environ.get('JERSEY_TOP_L_FRACTION', '').strip()
+    if not raw:
+        return 0.7
+    try:
+        f = float(raw)
+    except ValueError:
+        return 0.7
+    return min(1.0, max(0.01, f))
+
+
+top_l_frame_fraction = _top_l_frame_fraction_from_env()
+
 # centroids
 reid_env = 'centroids'
 reid_python = _get_python_path('jersey')

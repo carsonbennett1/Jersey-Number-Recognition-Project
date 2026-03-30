@@ -129,8 +129,8 @@ python oracle_max_after_stage6.py --part test --working-dir out/pipeline_runs/ap
 
 ## 8. File checklist (quick reference)
 
-- `main.py` — `--jersey_aux_str`, LMDB preflight, `JERSEY_STR_LMDB_ROOT`, pipeline defaults
-- `configuration.py` — `str_env` / `JERSEY_STR_ENV`, LMDB comment, pipeline output slug
+- `main.py` — `--jersey_aux_str`, `--combine_bayesian`, LMDB preflight, `JERSEY_STR_LMDB_ROOT`, unified legibility (raw + legible + illegible), STR interpreter preflight, Top-L combine by default
+- `configuration.py` — `str_env` / `JERSEY_STR_ENV`, `top_l_frame_fraction` / `JERSEY_TOP_L_FRACTION`, LMDB comment, pipeline output slug
 - `str/parseq/train.py` — argparse 3.14 shim, `_filter_pretrained_state_dict`, `strict=False` load
 - `str/parseq/strhub/data/augment.py` — NumPy 2 `sctypes` shim
 - `str/parseq/strhub/data/dataset.py` — safer `build_tree_dataset`
@@ -140,7 +140,21 @@ python oracle_max_after_stage6.py --part test --working-dir out/pipeline_runs/ap
 - `str/parseq/configs/experiment/parseq-jersey-aux.yaml` — enable aux
 - `str/parseq/strhub/models/parseq/system.py` — aux heads + loss
 - `docs/MODEL_SPECS.md` — training note
-- `oracle_max_after_stage6.py` — oracle upper bounds on track accuracy after crops (stage 6)
+- `oracle_max_after_stage6.py` — oracle upper bounds after stage 6; Top-L by default (`--combine-bayesian` for legacy Bayesian)
+- `str/parseq/strhub/models/utils.py` — `load_from_checkpoint(..., strict=False)` for jersey-aux checkpoints at inference
+
+---
+
+## 10. Default SoccerNet run (Approach 1 STR + Top-L)
+
+A normal `python main.py SoccerNet test` uses:
+
+1. **PARSeq inference** with the default SoccerNet `str_model` (jersey-aux fine-tuned checkpoint unless you set `JERSEY_STR_MODEL` / `JERSEY_SOCCERNET_STR_CKPT`). Training still uses `--train_str` and optional `--jersey_aux_str`; aux heads do not change the decode path at inference.
+2. **Legibility** in one pass: writes `raw_legible_result` (sigmoid scores for Top-L `qt`), `legible_result`, and `illegible_result`.
+3. **Combine** via `process_jersey_id_predictions_top_L` unless you pass **`--combine_bayesian`** (legacy `process_jersey_id_predictions`).
+4. **Top-L fraction:** set **`JERSEY_TOP_L_FRACTION`** (default `0.7`) to change how many frames per candidate are summed.
+
+The STR subprocess uses **`configuration.str_python`** (env **`JERSEY_STR_ENV`**, default `jersey`). If that executable is missing, the pipeline prints an error instead of failing obscurely.
 
 ---
 
