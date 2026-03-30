@@ -357,6 +357,9 @@ def soccer_net_pipeline(args):
 
     gauss_filtered_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
                                        config.dataset['SoccerNet'][args.part]['gauss_filtered'])
+    
+    raw_legibile_path = os.path.join(config.dataset['SoccerNet']['working_dir'],
+                                     config.dataset['SoccerNet'][args.part]['raw_legible_result'])
 
     # 1. Filter out soccer ball based on images size
     if args.pipeline['soccer_ball_filter']:
@@ -405,7 +408,7 @@ def soccer_net_pipeline(args):
         else:
             print("Classifying Legibility:")
             try:
-                legible_dict, illegible_tracklets = get_soccer_net_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
+                legible_dict, illegible_tracklets = get_soccer_net_raw_legibility_results(args, use_filtered=True, filter='gauss', exclude_balls=True)
             except Exception as error:
                 print(f'Failed to run legibility classifier:{error}')
                 success = False
@@ -448,11 +451,19 @@ def soccer_net_pipeline(args):
                 pose_config = os.path.join(config.pose_home, 'configs', 'body', '2d_kpt_sview_rgb_img', 'topdown_heatmap', 'coco', 'ViTPose_huge_coco_256x192.py')
                 pose_checkpoint = os.path.join(config.pose_home, 'checkpoints', 'vitpose-h.pth')
                 pose_script = os.path.join(_project_root, 'pose.py')
-                success = _run_cmd([
-                    config.pose_python, pose_script,
-                    pose_config, pose_checkpoint,
-                    '--img-root', '/', '--json-file', input_json, '--out-json', output_json
-                ], cwd=_project_root)
+                pose_py = config.pose_python
+                if not os.path.isfile(pose_py):
+                    print(
+                        f"ERROR: Pose interpreter not found: {pose_py}\n"
+                        f"Create the '{config.pose_env}' conda environment (mmcv + ViTPose + addict), e.g. run: python setup.py"
+                    )
+                    success = False
+                else:
+                    success = _run_cmd([
+                        pose_py, pose_script,
+                        pose_config, pose_checkpoint,
+                        '--img-root', '/', '--json-file', input_json, '--out-json', output_json
+                    ], cwd=_project_root)
                 print("Done detecting pose")
 
 
@@ -508,7 +519,7 @@ def soccer_net_pipeline(args):
             with open(final_results_path, 'r') as f:
                 consolidated_dict = json.load(f)
         else:
-            results_dict, analysis_results = helpers.process_jersey_id_predictions(str_result_file, useBias=True)
+            results_dict, analysis_results = helpers.process_jersey_id_predictions_top_L(str_result_file, raw_legibility_path=raw_legibile_path, filtered_results_path=gauss_filtered_path, useBias=True)
 
             consolidated_dict = consolidated_results(image_dir, results_dict, illegible_path, soccer_ball_list=soccer_ball_list)
 
