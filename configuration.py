@@ -127,7 +127,7 @@ dataset = {'SoccerNet':
 
                  'legibility_model_url':  "https://drive.google.com/uc?id=18HAuZbge3z8TSfRiX_FzsnKgiBs-RRNw",
                  'pose_model_url': 'https://drive.google.com/uc?id=1A3ftF118IcxMn_QONndR-8dPWpf7XzdV',
-                 'str_model': os.path.join(_main_repo, 'models/parseq_epoch=24-step=2575-val_accuracy=95.6044-val_NED=96.3255.ckpt'),
+                 'str_model': os.path.join(_main_repo, 'str/parseq/outputs/parseq/2026-03-29_14-02-59/checkpoints/epoch=11-step=1236-val_accuracy=95.6731-val_NED=96.4629.ckpt'),
 
                  #'str_model': 'pretrained=parseq',
                  'str_model_url': "https://drive.google.com/uc?id=1uRln22tlhneVt3P6MePmVxBWSLMsL3bm",

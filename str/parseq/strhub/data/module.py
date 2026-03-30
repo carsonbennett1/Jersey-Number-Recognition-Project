@@ -57,6 +57,8 @@ class SceneTextDataModule(pl.LightningDataModule):
         if augment:
             from .augment import rand_augment_transform
             transforms.append(rand_augment_transform())
+            # RandomPerspective simulates varying camera angles in sports video
+            transforms.append(T.RandomPerspective(distortion_scale=0.1, p=0.2))
         if rotation:
             transforms.append(lambda img: img.rotate(rotation, expand=True))
         transforms.extend([
@@ -64,6 +66,9 @@ class SceneTextDataModule(pl.LightningDataModule):
             T.ToTensor(),
             T.Normalize(0.5, 0.5)
         ])
+        if augment:
+            # RandomErasing simulates partial occlusion from arms/equipment
+            transforms.append(T.RandomErasing(p=0.1, scale=(0.02, 0.10), ratio=(0.3, 3.0)))
         return T.Compose(transforms)
 
     @property

@@ -77,7 +77,19 @@ def main(config: DictConfig):
     model: BaseSystem = hydra.utils.instantiate(config.model)
     # If specified, use pretrained weights to initialize the model
     if config.pretrained is not None:
-        model.load_state_dict(get_pretrained_weights(config.pretrained))
+        pretrained_state = get_pretrained_weights(config.pretrained)
+        # Handle shape mismatch when max_label_length differs from pretrained model
+        # (e.g., pretrained uses 25 chars but jersey numbers use 2 digits)
+        model_state = model.state_dict()
+        for key in list(pretrained_state.keys()):
+            if key in model_state and pretrained_state[key].shape != model_state[key].shape:
+                pretrained_shape = pretrained_state[key].shape
+                model_shape = model_state[key].shape
+                print(f'Truncating {key}: {pretrained_shape} -> {model_shape}')
+                # Truncate along the mismatched dimension (keep first N entries)
+                slices = tuple(slice(0, s) for s in model_shape)
+                pretrained_state[key] = pretrained_state[key][slices]
+        model.load_state_dict(pretrained_state)
     print(summarize(model, max_depth=1 if model.hparams.name.startswith('parseq') else 2))
 
     datamodule: SceneTextDataModule = hydra.utils.instantiate(config.data)
