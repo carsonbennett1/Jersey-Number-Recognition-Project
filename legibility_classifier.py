@@ -372,9 +372,9 @@ def load_legibility_model(model_path, arch='resnet18', device=None):
 
 
 # run inference on a list of files
-def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, device=None):
+def run(image_paths, model_path, threshold=0.5, arch='resnet18', model=None, device=None, batch_size=4):
     dataset = UnlabelledJerseyNumberLegibilityDataset(image_paths, arch=arch)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4,
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                                   shuffle=False, num_workers=0)
 
     if model is None:

@@ -31,6 +31,7 @@ from train_ctl_model import CTLModel
 
 from datasets.transforms import ReidTransforms
 
+import device_batching
 
 
 # Based on this repo: https://github.com/mikwieczorek/centroids-reid
@@ -49,7 +50,7 @@ def get_specs_from_version(model_version):
     conf, weights = str(conf), str(weights)
     return conf, weights
 
-def generate_features(input_folder, output_folder, model_version='res50_market'):
+def generate_features(input_folder, output_folder, model_version='res50_market', batch_size=None):
     # load model
     CONFIG_FILE, MODEL_FILE = get_specs_from_version(model_version)
     cfg.merge_from_file(CONFIG_FILE)
@@ -77,6 +78,13 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
     
     model.eval()
 
+    if device in ('cuda', 'mps'):
+        infer_bs = batch_size if batch_size is not None else device_batching.inference_batch_size(
+            default_gpu=32, default_cpu=1
+        )
+    else:
+        infer_bs = 1
+
     tracks = [t for t in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, t))]
     transforms_base = ReidTransforms(cfg)
     val_transforms = transforms_base.build_transforms(is_train=False)
@@ -98,14 +106,26 @@ def generate_features(input_folder, output_folder, model_version='res50_market')
         autocast_device = device if use_amp else 'cpu'
         
         with torch.inference_mode(), torch.amp.autocast(autocast_device, enabled=use_amp):
+            batch_tensors = []
+
+            def _flush_batch():
+                if not batch_tensors:
+                    return
+                stacked = torch.stack(batch_tensors).to(device)
+                _, global_feat = model.backbone(stacked)
+                global_feat = model.bn(global_feat)
+                for j in range(global_feat.shape[0]):
+                    features.append(global_feat[j].cpu().float().numpy().reshape(-1,))
+                batch_tensors.clear()
+
             for img_path in images:
                 img = cv2.imread(os.path.join(track_path, img_path))
                 input_img = Image.fromarray(img)
-                input_img = torch.stack([val_transforms(input_img)])
-                input_img = input_img.to(device)
-                _, global_feat = model.backbone(input_img)
-                global_feat = model.bn(global_feat)
-                features.append(global_feat.cpu().float().numpy().reshape(-1,))
+                t = val_transforms(input_img)
+                batch_tensors.append(t)
+                if len(batch_tensors) >= infer_bs:
+                    _flush_batch()
+            _flush_batch()
 
         np_feat = np.array(features)
         with open(output_file, 'wb') as f:
@@ -119,12 +139,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--tracklets_folder', help="Folder containing tracklet directories with images")
     parser.add_argument('--output_folder', help="Folder to store features in, one file per tracklet")
+    parser.add_argument(
+        '--batch_size',
+        type=int,
+        default=None,
+        help="ReID inference batch size on CUDA/MPS (default: from device_batching / JERSEY_INFERENCE_BATCH_GPU)",
+    )
     args = parser.parse_args()
 
     #create if does not exist
     Path(args.output_folder).mkdir(parents=True, exist_ok=True)
 
-    generate_features(args.tracklets_folder, args.output_folder)
+    generate_features(args.tracklets_folder, args.output_folder, batch_size=args.batch_size)
 
 
 

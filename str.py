@@ -19,7 +19,7 @@ import os
 import string
 import sys
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 import configuration as _cfg
 ROOT = os.path.join(_cfg._main_repo, 'str/parseq/')
@@ -45,6 +45,8 @@ from strhub.models.utils import load_from_checkpoint, parse_model_args
 from PIL import Image
 import json
 import csv
+
+from torch.utils.data import DataLoader, Dataset
 
 @dataclass
 class Result:
@@ -86,27 +88,82 @@ def print_results_table(results: List[Result], file=None):
           f'| {c.confidence:>10.2f} | {c.label_length:>12.2f} |', file=file)
 
 
-def run_inference(model, data_root, result_file, img_size):
-    # load images one by one, save paths and result
+class _JerseyCropInferenceDataset(Dataset):
+    """Sorted filenames under ``imgs/`` for PARSeq SoccerNet crop inference."""
+
+    def __init__(self, imgs_dir: str, filenames: List[str], img_size: Tuple[int, ...]):
+        self.imgs_dir = imgs_dir
+        self.filenames = filenames
+        self.transform = SceneTextDataModule.get_transform(img_size)
+
+    def __len__(self) -> int:
+        return len(self.filenames)
+
+    def __getitem__(self, idx: int):
+        fn = self.filenames[idx]
+        path = os.path.join(self.imgs_dir, fn)
+        image = Image.open(path).convert('RGB')
+        return self.transform(image), fn
+
+
+def _collate_jersey_crops(batch):
+    imgs = torch.stack([b[0] for b in batch])
+    names = [b[1] for b in batch]
+    return imgs, names
+
+
+def run_inference(model, data_root, result_file, img_size, batch_size=1, num_workers=0):
     file_dir = os.path.join(data_root, 'imgs')
-    filenames = os.listdir(file_dir)
-    filenames.sort()
+    filenames = sorted(f for f in os.listdir(file_dir) if not f.startswith('.'))
+    transform = SceneTextDataModule.get_transform(img_size)
     results = {}
-    for filename in tqdm(filenames):
-        image = Image.open(os.path.join(file_dir, filename)).convert('RGB')
-        transform = SceneTextDataModule.get_transform(img_size)
-        image = transform(image)
-        image = image.unsqueeze(0)
-        logits = model.forward(image.to(model.device))
-        #convert to 3 by 10
-        probs_full = logits[:,:3,:11].softmax(-1)
-        preds, probs = model.tokenizer.decode(probs_full)
-        logits = logits[:,:3,:11].cpu().detach().numpy()[0].tolist()
-        # probs = logits.softmax(-1)
-        # preds, probs = model.tokenizer.decode(probs)
-        probs_full = probs_full.cpu().detach().numpy()[0].tolist()
-        confidence = probs[0].cpu().detach().numpy().squeeze().tolist()
-        results[filename] = {'label':preds[0], 'confidence':confidence, 'raw': probs_full, 'logits':logits}
+
+    if batch_size <= 1:
+        for filename in tqdm(filenames):
+            image = Image.open(os.path.join(file_dir, filename)).convert('RGB')
+            image = transform(image).unsqueeze(0)
+            logits = model.forward(image.to(model.device))
+            probs_full = logits[:, :3, :11].softmax(-1)
+            preds, probs = model.tokenizer.decode(probs_full)
+            logits_np = logits[:, :3, :11].cpu().detach().numpy()[0].tolist()
+            probs_full_np = probs_full.cpu().detach().numpy()[0].tolist()
+            confidence = probs[0].cpu().detach().numpy().squeeze().tolist()
+            results[filename] = {
+                'label': preds[0],
+                'confidence': confidence,
+                'raw': probs_full_np,
+                'logits': logits_np,
+            }
+    else:
+        ds = _JerseyCropInferenceDataset(file_dir, filenames, img_size)
+        _dev = next(model.parameters()).device
+        pin_memory = _dev.type == 'cuda'
+        loader = DataLoader(
+            ds,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            collate_fn=_collate_jersey_crops,
+            pin_memory=pin_memory,
+            persistent_workers=num_workers > 0,
+        )
+        for imgs, names in tqdm(loader):
+            imgs = imgs.to(model.device)
+            logits = model.forward(imgs)
+            probs_full = logits[:, :3, :11].softmax(-1)
+            preds, probs = model.tokenizer.decode(probs_full)
+            logits_np = logits[:, :3, :11].cpu().detach().numpy()
+            probs_np = probs_full.cpu().detach().numpy()
+            for i, name in enumerate(names):
+                conf_t = probs[i].cpu().detach().numpy().squeeze()
+                confidence = conf_t.tolist() if hasattr(conf_t, 'tolist') else float(conf_t)
+                results[name] = {
+                    'label': preds[i],
+                    'confidence': confidence,
+                    'raw': probs_np[i].tolist(),
+                    'logits': logits_np[i].tolist(),
+                }
+
     with open(result_file, 'w') as f:
         json.dump(results, f)
 
@@ -289,7 +346,14 @@ def main():
     hp = model.hparams
 
     if args.inference:
-        run_inference(model, args.data_root, args.result_file, hp.img_size)
+        run_inference(
+            model,
+            args.data_root,
+            args.result_file,
+            hp.img_size,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+        )
         exit()
     if args.tune_temperature:
         set_temperature(model, args.data_root, hp.img_size)

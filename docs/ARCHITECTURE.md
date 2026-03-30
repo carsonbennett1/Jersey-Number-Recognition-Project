@@ -95,6 +95,7 @@ flowchart LR
 | File | Purpose |
 |------|---------|
 | `main.py` | Pipeline orchestrator; entry point `python main.py <dataset> <part>` |
+| `device_batching.py` | CUDA/MPS detection and GPU-gated inference batch sizes (SoccerNet) |
 | `configuration.py` | Paths, model URLs, conda env names (vitpose, parseq2, centroids) |
 | `helpers.py` | Pose JSON generation, torso cropping, prediction consolidation, evaluation |
 | `legibility_classifier.py` | Binary legibility classification (ResNet18/34 or ViT-B/16) |
@@ -138,3 +139,20 @@ Tracklets → Ball Filter + ReID → Outliers → Legibility → Pose → Crops 
 **Output:**
 - Predictions: `jersey_id_results.json` `{image_name: {label, confidence, raw, logits}}`
 - Final: `final_results.json` `{tracklet_id: jersey_number}`
+
+## Batched inference (SoccerNet only, CUDA / Apple MPS)
+
+Neural steps use **larger minibatches only when PyTorch reports a CUDA GPU or Apple Silicon MPS** (`device_batching.accelerator_available()`). On CPU-only hosts, batch sizes stay small (legibility: 4, ReID and STR: 1 per forward / safe defaults) so behavior stays predictable and memory-friendly.
+
+| Step | Module | Batching |
+|------|--------|----------|
+| ReID features | `centroid_reid.py` | Stacked forwards on CUDA/MPS (default batch 32; override with `--batch_size` or env `JERSEY_INFERENCE_BATCH_GPU`) |
+| Legibility | `legibility_classifier.py` / `main.py` | `DataLoader` batch size 32 on GPU/MPS, 4 on CPU |
+| STR (crops) | `str.py` / `main.py` | `DataLoader` over `imgs/`; batch 32 on GPU/MPS, 1 on CPU (passed as `--batch_size` from `main.py`) |
+| Pose | `pose.py` | **Not batched** — mmpose `inference_top_down_pose_model` is single-image; GPU still speeds each forward |
+| Gaussian outliers | `gaussian_outliers.py` | NumPy statistics only (no torch batching) |
+| Ball filter / torso crops | `helpers.py` | OpenCV / CPU I/O (not GPU-batched) |
+
+**Override:** set `JERSEY_INFERENCE_BATCH_GPU` to a positive integer to change the default GPU/MPS batch size for components that read it (`device_batching.inference_batch_size()`).
+
+**File:** `device_batching.py` — `accelerator_available()`, `inference_batch_size()`.

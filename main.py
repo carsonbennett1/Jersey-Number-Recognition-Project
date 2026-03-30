@@ -8,6 +8,7 @@ import json
 import helpers
 from tqdm import tqdm
 import configuration as config
+import device_batching
 from pathlib import Path
 
 def list_dirs(path):
@@ -52,6 +53,7 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
                 updated_tracklets.append(track)
         tracklets = updated_tracklets
 
+    leg_bs = device_batching.inference_batch_size(default_gpu=32, default_cpu=4)
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
         if use_filtered:
@@ -60,7 +62,13 @@ def get_soccer_net_raw_legibility_results(args, use_filtered = True, filter = 'g
             images = os.listdir(track_dir)
         #images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
-        track_results = lc.run(images_full_path, config.dataset['SoccerNet']['legibility_model'], threshold=-1, arch=config.dataset['SoccerNet']['legibility_model_arch'])
+        track_results = lc.run(
+            images_full_path,
+            config.dataset['SoccerNet']['legibility_model'],
+            threshold=-1,
+            arch=config.dataset['SoccerNet']['legibility_model_arch'],
+            batch_size=leg_bs,
+        )
         results_dict[directory] = track_results
 
     # save results
@@ -105,6 +113,7 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
     model_path = config.dataset['SoccerNet']['legibility_model']
     model_arch = config.dataset['SoccerNet']['legibility_model_arch']
     leg_model, leg_device = lc.load_legibility_model(model_path, arch=model_arch)
+    leg_bs = device_batching.inference_batch_size(default_gpu=32, default_cpu=4)
 
     for directory in tqdm(tracklets):
         track_dir = os.path.join(path_to_images, directory)
@@ -113,7 +122,15 @@ def get_soccer_net_legibility_results(args, use_filtered = False, filter = 'sim'
         else:
             images = os.listdir(track_dir)
         images_full_path = [os.path.join(track_dir, x) for x in images]
-        track_results = lc.run(images_full_path, model_path, arch=model_arch, threshold=0.5, model=leg_model, device=leg_device)
+        track_results = lc.run(
+            images_full_path,
+            model_path,
+            arch=model_arch,
+            threshold=0.5,
+            model=leg_model,
+            device=leg_device,
+            batch_size=leg_bs,
+        )
         legible = list(np.nonzero(track_results))[0]
         if len(legible) == 0:
             illegible_tracklets.append(directory)
@@ -388,9 +405,12 @@ def soccer_net_pipeline(args):
             print("Predict numbers")
             crops_dir = os.path.join(config.dataset['SoccerNet']['working_dir'], config.dataset['SoccerNet'][args.part]['crops_folder'])
             str_script = os.path.join(_project_root, 'str.py')
+            str_bs = device_batching.inference_batch_size(default_gpu=32, default_cpu=1)
+            str_workers = '0' if os.name == 'nt' else '4'
             success = _run_cmd([
                 config.str_python, str_script, config.dataset["SoccerNet"]["str_model"],
-                '--data_root', crops_dir, '--batch_size', '1', '--inference', '--result_file', str_result_file
+                '--data_root', crops_dir, '--batch_size', str(str_bs), '--num_workers', str_workers,
+                '--inference', '--result_file', str_result_file
             ], cwd=_project_root)
             print("Done predict numbers")
 
