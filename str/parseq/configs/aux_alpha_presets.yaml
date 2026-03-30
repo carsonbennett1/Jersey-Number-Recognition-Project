@@ -6,7 +6,13 @@
 # Scales: "low_aux" / "high_aux" multiply all four defaults together for weaker/stronger total aux vs PARSeq loss.
 
 presets:
-  
+  - id: 1
+    name: default
+    aux_alpha_full: 0.25
+    aux_alpha_tens: 0.15
+    aux_alpha_units: 0.15
+    aux_alpha_count: 0.2
+    note: Default weights.
 
   - id: 2
     name: equal_quarters
