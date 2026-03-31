@@ -15,13 +15,13 @@ Approach additional: Fine tuned parameters and fixed motion blur
 
 
 #### Member Roles
-| Name | Student ID |Roles, Contribution |
-|------|------------|--------------------|
-| Carson Bennett | 18726513 | Proposed approach 1, worked on implementing approach 2, involved in improving upon approach 2, recorded content for video demo |
-| Aakash Tirathdas | 19000413 | Helped with initial setup, worked on implementing on approach 1, did an additional approach in experimental, recorded content for video demo |
-| Harjot Sahota | 97986475 | helped with initial setup, worked on implementing approach 2, recorded progress for different implementations, recording content for video demo |
-| Brendan James | 31927486 | Researched for proposal, worked on evaluating results, editing for video demo |
-| Zhongda | 41017377 | TODO |
+| Name | Roles, Contribution |
+|------|---------------------|
+| Carson Bennett  | Proposed approach 1, worked on implementing approach 2, involved in improving upon approach 2, recorded content for video demo |
+| Aakash Tirathdas  | Helped with initial setup, worked on implementing on approach 1, did an additional approach in experimental, recorded content for video demo |
+| Harjot Sahota  | helped with initial setup, worked on implementing approach 2, recorded progress for different implementations, recording content for video demo |
+| Brendan James  | Researched for proposal, worked on evaluating results, editing for video demo |
+| Zhongda  | TODO |
 
 
 #### Branches and their Contributions
