@@ -36,5 +36,6 @@ Approach additional: Fine tuned parameters and fixed motion blur
 | Additional Approach | Base repo tuning and fixing | Aakash | 88.52188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/experimental) |
 | Batching Base | Add batching to the base branch | Aakash, Brendon | - | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/batches) |
 
-
+## Video Demo
+https://youtu.be/-VSREV-4DrI
 
