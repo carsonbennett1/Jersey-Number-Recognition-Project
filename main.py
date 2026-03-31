@@ -522,8 +522,7 @@ def soccer_net_pipeline(args):
                 consolidated_dict = json.load(f)
         with open(gt_path, 'r') as gf:
             gt_dict = json.load(gf)
-        print(len(consolidated_dict.keys()), len(gt_dict.keys()))
-        helpers.evaluate_results(consolidated_dict, gt_dict, full_results = analysis_results)
+        helpers.evaluate_results(consolidated_dict, gt_dict, full_results=analysis_results)
 
 
 if __name__ == '__main__':
