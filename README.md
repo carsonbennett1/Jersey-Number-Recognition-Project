@@ -27,7 +27,7 @@ For each frame in the tracklet, calculate v(t,k) which, in english, would be the
 
 v(t,k) = qt x log(Pt(k) + ε)
 
-Next, we'll take the output of v(t,k) and take the top L frames - the frames with the highest confidence values that the jersey number is a 1. Following, use sum to change the array from 2D to 1D and sum the total score by candidate.
+Next, we'll take the output of v(t,k) for all frames of that number, order the list ascending, and then take the top L frames - the frames with the highest confidence values that the jersey number is a 1. Following, use sum to change the array from 2D to 1D, and sum the total score by candidate.
 
 Finally, use argmax to get the highest confidence level from the candidate total scores.
 
