@@ -18,7 +18,7 @@ Approach additional: Fine tuned parameters and fixed motion blur
 |------|------------|--------------------|
 | Carson Bennett | 18726513 | Proposed approach 1, worked on implementing approach 2, involved in improving upon approach 2, recorded content for video demo |
 | Aakash Tirathdas | 19000413 | Helped with initial setup, worked on implementing on approach 1, did an additional approach in experimental, recorded content for video demo |
-| Harjot Sahota | 97986475 | TODO |
+| Harjot Sahota | 97986475 | helped with initial setup, worked on implementing approach 2, recorded progress for different implementations, recording content for video demo |
 | Brendan | 31927486 | TODO |
 | Zhongda | 41017377 | TODO |
 
@@ -31,6 +31,7 @@ Approach additional: Fine tuned parameters and fixed motion blur
 | Approach 1 | Multi-Task Learning for Frame-Level Recognition | Aakash |  85.2188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/approach1) |
 | Approach 2 | Vanilla Implementation | Carson, Harjot | 83.3195706028076% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/top-L) |
 | Approach 2 | Top-L: L as Tracklet Frame Length Percentage | Carson | 85.2188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/top-L-improvements) |
+| Approach 2 | Top-L whole number instead of 10's digit and ones digit | Harjot | 84.31048720066062% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/harjot/Top-L) 
 | Additional Approach | Base repo tuning and fixing | Aakash | 88.52188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/experimental) |
 | Batching Base | Add batching to the base branch | Aakash, Brendon | - | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/batches) |
 
