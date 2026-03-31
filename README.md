@@ -21,7 +21,7 @@ Approach additional: Fine tuned parameters and fixed motion blur
 | Aakash Tirathdas  | Helped with initial setup, worked on implementing on approach 1, did an additional approach in experimental, recorded content for video demo |
 | Harjot Sahota  | helped with initial setup, worked on implementing approach 2, recorded progress for different implementations, recording content for video demo |
 | Brendan James  | Researched for proposal, worked on evaluating results, editing for video demo |
-| Zhongda  | TODO |
+| Zhongda  | Coordinated and drafted the proposal, presentation, and report; designed the original Top-L consolidation method |
 
 
 #### Branches and their Contributions
