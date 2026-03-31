@@ -1,5 +1,8 @@
 ## Group 14 - Jersey Number Recognition Project - COSC 419/519
 
+## Setup
+refer to [setup](docs/SETUP_GUIDE.md)
+
 **NOTE**: ALL APPROACHES ARE DONE IN DIFFERENT BRANCHES WITH DIFFERENT IMPLEMENTATIONS. SEE "BRANCHES AND THEIR CONTRIBUTIONS" SECTION BELOW FOR FURTHER DETAILS.
 
 #### Approaches
@@ -7,12 +10,14 @@ Approach 1: Multi-Task Learning for Frame-Level Recognition
 
 Approach 2: Reliability-Weighted Top-L Consolidation
 
+Approach additional: Fine tuned parameters and fixed motion blur
+
 
 #### Member Roles
 | Name | Student ID |Roles, Contribution |
 |------|------------|--------------------|
-| Carson Bennett | 18726513 | Proposed approach 1, worked on implementing approach 2, involved in improving upon approach 2 |
-| Aakash Tirathdas | 19000413 | TODO |
+| Carson Bennett | 18726513 | Proposed approach 1, worked on implementing approach 2, involved in improving upon approach 2, recorded content for video demo |
+| Aakash Tirathdas | 19000413 | Helped with initial setup, worked on implementing on approach 1, did an additional approach in experimental, recorded content for video demo |
 | Harjot Sahota | 97986475 | TODO |
 | Brendan | 31927486 | TODO |
 | Zhongda | 41017377 | TODO |
@@ -22,8 +27,12 @@ Approach 2: Reliability-Weighted Top-L Consolidation
 
 | Approach | Variation | Author(s) | Accuracy | Branch Link |
 |----------|-----------|-----------|----------|-------------|
+| Main/raw repo | Base Repo | Aakash, Harjot | 86.70520231213872% | base github link |
+| Approach 1 | Multi-Task Learning for Frame-Level Recognition | Aakash |  85.2188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/approach1) |
 | Approach 2 | Vanilla Implementation | Carson, Harjot | 83.3195706028076% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/top-L) |
 | Approach 2 | Top-L: L as Tracklet Frame Length Percentage | Carson | 85.2188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/top-L-improvements) |
+| Additional Approach | Base repo tuning and fixing | Aakash | 88.52188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/experimental) |
+| Batching Base | Add batching to the base branch | Aakash, Brendon | - | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/batches) |
 
 
 
