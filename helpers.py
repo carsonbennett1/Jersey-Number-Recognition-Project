@@ -12,6 +12,7 @@ import random
 import shutil
 from pathlib import Path
 from scipy.special import softmax as softmax
+from sklearn.metrics import classification_report
 
 json_img_template = { "id": 0,
             "file_name": "",
@@ -625,28 +626,67 @@ def evaluate_legibility(gt_path, illegible_path, legible_tracklets, soccer_ball_
             #     num_per_tracklet_TP.append(len(legible_tracklets[track]))
         elif true_value == '-1' and predicted_legible:
             FP += 1
-            print(f"FP:{track}")
             # if legible_tracklets is not None:
             #     num_per_tracklet_FP.append(len(legible_tracklets[track]))
         elif true_value != '-1' and not predicted_legible:
             FN += 1
-            print(f"FN:{track}")
         total += 1
 
-    print(f'Correct {correct} out of {total}. Accuracy {100*correct/total}%.')
-    print(f'TP={TP}, TN={TN}, FP={FP}, FN={FN}')
-    Pr = TP / (TP + FP)
-    Recall = TP / (TP + FN)
-    print(f"Precision={Pr}, Recall={Recall}")
-    print(f"F1={2 * Pr * Recall / (Pr + Recall)}")
+    accuracy = 100.0 * correct / total if total > 0 else 0.0
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 0.0
+    recall = TP / (TP + FN) if (TP + FN) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
+
+    print("Legibility Summary")
+    print(f"Total tracklets: {total}")
+    print(f"Correct: {correct}")
+    print(f"Accuracy: {accuracy:.2f}%")
+    print(f"TP: {TP}")
+    print(f"TN: {TN}")
+    print(f"FP: {FP}")
+    print(f"FN: {FN}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-score: {f1:.4f}")
 
 
 SKIP_ILLEGIBLE = False
-def evaluate_results(consolidated_dict, gt_dict, full_results = None):
+
+
+def _norm_jersey_label(x):
+    """Normalize GT/pred to int in [-1, 99] for metrics / sklearn."""
+    if x is None:
+        return -1
+    if isinstance(x, str):
+        s = x.strip()
+        if s in ("-1", ""):
+            return -1
+        try:
+            v = int(s)
+        except ValueError:
+            return -1
+    else:
+        try:
+            v = int(x)
+        except (TypeError, ValueError):
+            return -1
+    if v < -1 or v > 99:
+        return -1
+    return v
+
+
+def evaluate_results(consolidated_dict, gt_dict, full_results=None):
+    y_true_all = []
+    y_pred_all = []
     correct = 0
     total = 0
     mistakes = []
     count_of_correct_in_full_results = 0
+
     for id in gt_dict.keys():
         try:
             predicted = consolidated_dict[id]
@@ -655,32 +695,84 @@ def evaluate_results(consolidated_dict, gt_dict, full_results = None):
             consolidated_dict[id] = -1
         if SKIP_ILLEGIBLE and (gt_dict[id] == -1 or predicted == -1):
             continue
+
+        gt_n = _norm_jersey_label(gt_dict[id])
+        pr_n = _norm_jersey_label(predicted)
+        y_true_all.append(gt_n)
+        y_pred_all.append(pr_n)
+
         if str(gt_dict[id]) == str(predicted):
             correct += 1
         else:
-            #print(predicted, gt_dict[id])
             mistakes.append(id)
         total += 1
-    print(f"Total number of trackslets: {total}, correct: {correct}, accuracy: {100.0 * correct/total}%")
-    #print(f"Tracklets with mistakes: {mistakes}")
-    illegible_mistake_count = 0
-    illegible_gt_count = 0
-    for m in mistakes:
-        #print(f"predicted:{consolidated_dict[m]},    real:{gt_dict[m]}")
-        #count how many we considered illegible
-        if str(consolidated_dict[m]) == str(-1):
-            illegible_mistake_count += 1
-        elif str(gt_dict[m]) == str(-1):
-            illegible_gt_count += 1
-        elif not (full_results is None):
-            if m in full_results.keys():
-                #print(f"track {m} , true label {gt_dict[m]}; predictions {full_results[m]}")
-                if gt_dict[m] in full_results[m]['unique']:
-                    count_of_correct_in_full_results += 1
-        #print(f"track {m} , true label {gt_dict[m]}; prediction {consolidated_dict[m]}")
-    #print(f'mismarked {illegible_mistake_count} out of {len(mistakes)} as illegible')
-    #print(f'mismarked {illegible_gt_count} out of {len(mistakes)} as legible')
-    #print(f"predicted correctly but not picked: {count_of_correct_in_full_results}")
+
+    labels_all = sorted(set(y_true_all) | set(y_pred_all))
+    acc_pct = 100.0 * correct / total if total > 0 else 0.0
+
+    print()
+    print("Recognition Metrics — Including Illegible as a Class (-1)")
+    print(f"Top-1 Accuracy: {correct}/{total} = {acc_pct:.2f}%")
+    print("Precision / Recall / F1-score:")
+    print(
+        classification_report(
+            y_true_all,
+            y_pred_all,
+            labels=labels_all,
+            zero_division=0,
+        )
+    )
+
+    legible_ids = []
+    for tid in gt_dict.keys():
+        try:
+            pred = consolidated_dict[tid]
+        except KeyError:
+            pred = -1
+        if SKIP_ILLEGIBLE and (gt_dict[tid] == -1 or pred == -1):
+            continue
+        if _norm_jersey_label(gt_dict[tid]) == -1:
+            continue
+        legible_ids.append(tid)
+
+    y_true_leg = [_norm_jersey_label(gt_dict[tid]) for tid in legible_ids]
+    y_pred_leg = [_norm_jersey_label(consolidated_dict[tid]) for tid in legible_ids]
+    labels_leg = sorted(set(y_true_leg) | set(y_pred_leg))
+    correct_leg = sum(1 for a, b in zip(y_true_leg, y_pred_leg) if a == b)
+    n_leg = len(y_true_leg)
+    acc_leg_pct = 100.0 * correct_leg / n_leg if n_leg > 0 else 0.0
+
+    print("Recognition Metrics — Legible-Only Tracklets")
+    print(f"Top-1 Accuracy: {correct_leg}/{n_leg} = {acc_leg_pct:.2f}%")
+    print("Precision / Recall / F1-score:")
+    print(
+        classification_report(
+            y_true_leg,
+            y_pred_leg,
+            labels=labels_leg,
+            zero_division=0,
+        )
+    )
+
+    if full_results is not None and mistakes:
+        for m in mistakes:
+            if str(consolidated_dict[m]) == str(-1) or str(gt_dict[m]) == str(-1):
+                continue
+            if m not in full_results:
+                continue
+            uniq = full_results[m]["unique"]
+            try:
+                gti = int(gt_dict[m])
+            except (TypeError, ValueError):
+                continue
+            cand = set(np.asarray(uniq).ravel().tolist())
+            if gti in cand:
+                count_of_correct_in_full_results += 1
+        print()
+        print(
+            "Consolidation diagnostic — among mistakes, GT in per-frame candidate set "
+            f"but not chosen: {count_of_correct_in_full_results}"
+        )
 
 def convert_polygon_to_bbox(polygon):
     # Initialize min and max values with the first vertex of the polygon.
