@@ -34,7 +34,7 @@ Approach additional: Fine tuned parameters and fixed motion blur
 | Approach 2 | Top-L: L as Tracklet Frame Length Percentage | Carson | 85.2188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/top-L-improvements) |
 | Approach 2 | Top-L whole number instead of 10's digit and ones digit | Harjot | 84.31048720066062% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/harjot/Top-L) 
 | Additional Approach | Base repo tuning and fixing | Aakash | 88.52188274153592% | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/experimental) |
-| Batching Base | Add batching to the base branch | Aakash, Brendon | - | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/batches) |
+| Batching Base | Add batching to the base branch | Aakash, Brendan | - | [here](https://github.com/carsonbennett1/Jersey-Number-Recognition-Project/tree/batches) |
 
 ## Video Demo
 https://youtu.be/-VSREV-4DrI
