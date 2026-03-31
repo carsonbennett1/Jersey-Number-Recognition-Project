@@ -1,7 +1,5 @@
 ## Top-L: L as Tracklet Frame Length Percentage - Improvements to Approach 2
 
-Unfortunately, our proposed Top-L consolidation was unable to deliver a higher accuracy than the baseline. Even with a true representation of the formula, correctly matching legibility scores, and numerous tweaks to our L value, we were unable to obtain an overall accuracy higher than 84.64%, and subsequently, the baseline. Harjot’s approach, by breaking away from the digit splitting approach and taking the digits in together, but still keeping the theme of Top-L, was also unable to break 84.64%.
-
 Determined to try and get the most out of our proposal, I came up with an idea that extended our base implementation. When doing trial and error with our L values, I realized that we were using a constant L value with an unknown number of frames for each tracklet. To further explain, our constant L was gathering different top-L frames based on how many frames the tracklet had.  
 
 For example, suppose we have two traklets, and a constant L of 7.
@@ -20,7 +18,7 @@ Results:
 | Method | L | qt | Accuracy | Notes |
 |--------|---|----|----------|-------|
 | Baseline | N/A | N/A | 86.95293146160198% | N/A |
-| Top-L simple | 3 | 1 | (before using legibility scores) | 83.3195706028076% | Simple version that plugs in our formula into the baseline method |
+| Top-L simple | 3 | 1 (before using legibility scores) | 83.3195706028076% | Simple version that plugs in our formula into the baseline method |
 | Top-L: L as Tracklet Frame Length Percentage | 0.7 | Raw_scores | 85.2188274153592% | Instead of having a constant L value, a relative L percentage based on tracklet length has been implemented | 
 
-This slight tweak to the handling of L and our top confidence values resulted in an overall better accuracy score than the vanilla implementation coming in at 85.2188274153592%. While still slightly under the baseline method, we were still able to get a bit more out of the Top-L consolidation approach than originally expected.
+This slight tweak to the handling of L and our top confidence values resulted in an overall better accuracy score than the vanilla implementation coming in at 85.2188274153592%. While still slightly under the baseline method, we were still able to get a bit more out of the Top-L consolidation approach than the vanilla implementation.
