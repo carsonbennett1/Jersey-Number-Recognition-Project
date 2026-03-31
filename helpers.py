@@ -429,7 +429,7 @@ def predict_jersey_number(image_predictions, useBias=False):
 
 def candidate_and_frame_processing(confidence_values, tracklet):
     e = 1e-9
-    percentage_frames_keep = .7    # percentage of frames to keep for top L
+    percentage_frames_keep = .7
     qt = np.array(tracklet)
     if len(qt) == 0 or len(confidence_values) == 0:
         return 0, 0
@@ -439,7 +439,6 @@ def candidate_and_frame_processing(confidence_values, tracklet):
 
     for i in range(columns):
         frame_values = []
-        # variable L --> now accomodates for different size frames and takes the top 1/3 of frames as top L
         frame_count = len(confidence_values)
         L = max(1, int(round(frame_count * percentage_frames_keep)))
         for j in range(len(confidence_values)):
