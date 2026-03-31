@@ -1,150 +1,84 @@
-# COSC 419 Group Project - Jersey Number Recognition
-#### Group: 14
+# Top-L Hard Assignment
 
-# Cloned Repo and Findings Below
-## A General Framework for Jersey Number Recognition in Sports
-Code, data, and model weights for paper  [A General Framework for Jersey Number Recognition in Sports](https://openaccess.thecvf.com/content/CVPR2024W/CVsports/papers/Koshkina_A_General_Framework_for_Jersey_Number_Recognition_in_Sports_Video_CVPRW_2024_paper.pdf) (Maria Koshkina, James H. Elder).
+## What this is
 
-![Pipeline](docs/soccer_pipeline.png)
+Our original Top-L method did not beat the baseline accuracy of **86.95%**.
 
-Image-level detection, localization and recognition (experiments on Hockey dataset):
-  - legibility classifier
-  - scene text recognition for jersey numbers
+Because of that, I tried a simpler different version of Top-L using **hard assignment**.
 
-Tracklet-level detection, localization and recognition (experiments on SoccerNet dataset):
-  - occlusion/outlier removal using re-id features and fitting a Gaussian
-  - legibility classifier
-  - pose-guided RoI cropping
-  - scene text recognition for jersey numbers
-  - tracklet prediction consolidation
+My final accuracy with this version was **85.2188274153592%**.
 
-## Requirements:
-* pytorch 1.9.0
-* opencv
+So this version still did not beat baseline, but it was fairly close.
 
-## Setup:
-Clone current repo.
-Create conda environment and install requirements.
-Code makes use of the several repositories. Run 
-```
-python3 setup.py 
-```
+---
 
-to automatically clone, setup a separate conda environment for each and fetch models. 
+## The main idea
 
-Alternatively,  clone each of the following repo, setup conda environments for each following documentation in corresponding repo, and download models:
-### SAM:
-Should be in jersey-number-pipeline/sam. Repo: [https://github.com/davda54/sam](https://github.com/davda54/sam)
+The older method treated the tens digit and ones digit separately.
 
-### Centroid-Reid:
-Should be in jersey-number-pipeline/reid/centroids-reid. Repo: [https://github.com/mikwieczorek/centroids-reid](https://github.com/mikwieczorek/centroids-reid).
-Download [centroid-reid model weights](https://drive.google.com/file/d/1bSUNpvMfJkvCFOu-TK-o7iGY1p-9BxmO/view?usp=sharing) and place 
-them under jersey-number-pipeline/reid/centroids-reid/models.
+I changed that.
 
-### ViTPose:
-Should be in jersey-number-pipeline/pose/ViTPose. Repo: [https://github.com/ViTAE-Transformer/ViTPose](https://github.com/ViTAE-Transformer/ViTPose).
-Download [ViTPose model weights](https://1drv.ms/u/s!AimBgYV7JjTlgShLMI-kkmvNfF_h?e=dEhGHe) and place 
-them under jersey-number-pipeline/pose/ViTPose/checkpoints/.
+Instead of splitting the number into two separate digit predictions, my method lets each frame vote for **one full jersey number only**.
 
-### PARSeq:
-We include the version of the PARSeq code that was used to fine-tune the jersey number model as part of this repo. The original PARSeq repo is [https://github.com/baudm/parseq](https://github.com/baudm/parseq). Model weights should be downloaded and placed under jersey-number-pipeline/models/. 
-* [Original model weights](https://drive.google.com/file/d/1AK_GnM6pIYyfIf3tBYSKIyR3Fa3Z46Cx/view?usp=sharing)
-* [Hockey fine-tuned](https://drive.google.com/file/d/1FyM31xvSXFRusN0sZH0EWXoHwDfB9WIE/view?usp=sharing)
-* [SoccerNet fine-tuned](https://drive.google.com/file/d/1uRln22tlhneVt3P6MePmVxBWSLMsL3bm/view?usp=sharing)
+So if a frame predicts **47**, that frame supports **47 only**.
 
+This is important because the model already predicts the full number, so splitting it into separate digits can lose information.
 
-## Data:
-SoccerNet Jersey Number Recognition:
-[https://github.com/SoccerNet/sn-jersey](https://github.com/SoccerNet/sn-jersey)
-Download and save under /data subfolder. 
+---
 
-* Weakly-labelled player images used to train legibility classifier can be downloaded [here](https://drive.google.com/file/d/1CmJfUmS_ZudgEiCT14b2CbyMA3nEO_uy/view?usp=sharing). 
-* Weakly-labelled jersey number crops used to fine-tune STR in LMDB format can be downloaded [here](https://drive.google.com/file/d/1PX8XDF3nNMZAvcjL6M5hurwX78ePAhSs/view?usp=sharing).
+## How my method works
 
-Hockey (comprised of legibility dataset and jersey number dataset): 
-* Request access by contacting [Maria Koshkina](mailto:koshkina@hotmail.com?subject=Hockey). Extract under data/Hockey subfolder.
+For each frame:
+- take the predicted jersey number
+- take the confidence
+- build a vector for numbers 1 to 99
+- give the predicted number the confidence
+- give all other numbers a very small value
 
-### Trained Legibility Classifier Weights:
-Download and place under jersey-number-pipeline/models/.
-* [Hockey](https://drive.google.com/file/d/1RfxINtZ_wCNVF8iZsiMYuFOP7KMgqgDp/view?usp=sharing)
-* [SoccerNet](https://drive.google.com/file/d/18HAuZbge3z8TSfRiX_FzsnKgiBs-RRNw/view?usp=sharing)
+Then for each tracklet:
+- collect all frame predictions
+- use the legibility score for each frame
+- score each possible jersey number
+- keep only the best **L** frame scores
+- sum them
+- choose the number with the highest score
 
+So the method focuses on the **best frames**, instead of using every frame equally.
 
-## Configuration:
-Update configuration.py if required to set custom path to data or dependencies.
+---
 
-**For cross-platform usage (Windows/Mac/Linux):** The project now automatically detects your OS and configures paths, Python executables, and GPU acceleration (CUDA/MPS/CPU) accordingly. See [DEVICE_AND_PLATFORM.md](DEVICE_AND_PLATFORM.md) for details on:
-- Moving the project between machines
-- Overriding auto-detected paths via environment variables
-- Platform-specific behavior (DataLoader workers, GPU types, etc.)
+## Legibility
 
-**Environment variables (optional):**
-- `JERSEY_PROJECT_ROOT`: Override project root path (default: auto-detected from configuration.py location)
-- `JERSEY_CONDA_BASE`: Override conda environments path (default: ~/miniconda3/envs) 
+I also added illegibility handling.
 
-## Inference:
-To run the full inference pipeline for SoccerNet:
-```
-python3 main.py SoccerNet test
-```
-To run legibility and jersey number inference for hockey:
-```
-python3 main.py Hockey test
-```
-Update actions in main.py actions list to run steps selectively.
+If the frames are too unclear, the tracklet is marked as **-1** instead of forcing a bad prediction.
 
-## Train (Hockey)
-Train legibility classifier:
-```
-python3 legibility_classifier.py --train --arch resnet34 --sam --data <new-dataset-directory> --trained_model_path ./experiments/hockey_legibility.pth
-```
+This happens when:
+- the legibility scores are too low
+- or the best candidate score is still too weak
 
-Fine-tune PARSeq STR for hockey number recognition:
-```
-python3 main.py Hockey train --train_str
-```
+This was an important part of my contribution because it helps the system avoid making weak predictions.
 
-Trained model will be under str/parseq/outputs
+---
 
-## Train (SoccerNet)
-To train legibility classifier and jersey number recognition for SoccerNet, we first generate weakly labelled datasets and then use them to fine-tune.
-Weak labels are obtained by using models trained on hockey data.
+## Result
 
-Train legibility classifier for it:
-```
-python3 legibility_classifier.py --finetune --arch resnet34 --sam --data <new-dataset-directory>  --full_val_dir
-<new-dataset-directory>/val --trained_model_path ./experiments/hockey_legibility.pth --new_trained_model_path ./experiments/sn_legibility.pth
-```
+Baseline accuracy: **86.95%**  
+My hard-assignment Top-L accuracy: **85.2188274153592%**
 
-Fine-tune PARSeq on weakly-labelled SoccerNet data:
-```
-python3 main.py SoccerNet train --train_str
-```
+So overall:
+- it did **not** beat the baseline
+- but it fixed the digit independence issue
+- and it added illegibility detection directly into the final output
 
-Trained model will be under str/parseq/outputs.
+---
 
-## Citation
-```
-@InProceedings{Koshkina_2024_CVPR,
-    author    = {Koshkina, Maria and Elder, James H.},
-    title     = {A General Framework for Jersey Number Recognition in Sports Video},
-    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
-    month     = {June},
-    year      = {2024},
-    pages     = {3235-3244}
-}
-```
+## Short summary
 
-## Acknowledgements
-We would like to thank authors of the following repositories: 
-* [PARSeq](https://github.com/baudm/parseq)
-* [Centroid-Reid](https://github.com/mikwieczorek/centroids-reid)
-* [ViTPose](https://github.com/ViTAE-Transformer/ViTPose)
-* [SoccerNet](https://github.com/SoccerNet/sn-jersey)
-* [McGill Hockey Player Tracking Dataset](https://github.com/grant81/hockeyTrackingDataset)
-* [SAM](https://github.com/davda54/sam)
+My version of Top-L was a simpler full-number approach.
 
-## License
-[![License](https://i.creativecommons.org/l/by-nc/3.0/88x31.png)](http://creativecommons.org/licenses/by-nc/3.0/)
+Instead of splitting digits, each frame voted for one full number.
 
-This work is licensed under a [Creative Commons Attribution-NonCommercial 3.0 Unported License](http://creativecommons.org/licenses/by-nc/3.0/).
+Then Top-L kept only the strongest frame evidence.
+
+This gave a result close to baseline, but still a little lower.
