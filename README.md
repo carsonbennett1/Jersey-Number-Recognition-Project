@@ -3,9 +3,10 @@
 ## Setup
 refer to [setup](docs/SETUP_GUIDE.md)
 
+## Approaches
+
 **NOTE**: ALL APPROACHES ARE DONE IN DIFFERENT BRANCHES WITH DIFFERENT IMPLEMENTATIONS. SEE "BRANCHES AND THEIR CONTRIBUTIONS" SECTION BELOW FOR FURTHER DETAILS.
 
-#### Approaches
 Approach 1: Multi-Task Learning for Frame-Level Recognition
 
 Approach 2: Reliability-Weighted Top-L Consolidation
