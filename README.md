@@ -1,150 +1,51 @@
-# COSC 419 Group Project - Jersey Number Recognition
-#### Group: 14
+## Overview of Top-L and Understanding How it can be Implemented
 
-# Cloned Repo and Findings Below
-## A General Framework for Jersey Number Recognition in Sports
-Code, data, and model weights for paper  [A General Framework for Jersey Number Recognition in Sports](https://openaccess.thecvf.com/content/CVPR2024W/CVsports/papers/Koshkina_A_General_Framework_for_Jersey_Number_Recognition_in_Sports_Video_CVPRW_2024_paper.pdf) (Maria Koshkina, James H. Elder).
+#### Definitions
+**Frame**: single picture of the player
 
-![Pipeline](docs/soccer_pipeline.png)
+**Tracklet**: multiple different frames of a player all taken within milliseconds or seconds of one another. I.e. an array of frames.
 
-Image-level detection, localization and recognition (experiments on Hockey dataset):
-  - legibility classifier
-  - scene text recognition for jersey numbers
+#### Legend
+| Symbol | Designation | Implementation |
+|--------|-------------|----------------|
+| T |frames available in tracklet| image_predictions |
+| K |candidate numbers (0-99)| columns in tens & units likelihood |
+| qt | legibility score for each frame in a tracklet | passed in from raw legibility file |
+| Pt(k) | probability for candidate k in frame t | values inside tens & units likelihood |
+| L | how many top frames to keep | L = (whatever we decide to be our number of top frames) |
+| ε | small decimal to avoid possibility of log(0)| ε =  1e-9 | 
 
-Tracklet-level detection, localization and recognition (experiments on SoccerNet dataset):
-  - occlusion/outlier removal using re-id features and fitting a Gaussian
-  - legibility classifier
-  - pose-guided RoI cropping
-  - scene text recognition for jersey numbers
-  - tracklet prediction consolidation
+**Advice**: it's helpful to keep in mind that "candidate" is just jersey number.
+- candidate = jersey number
 
-## Requirements:
-* pytorch 1.9.0
-* opencv
+#### General Idea in Plain English
+Take all possible jersey numbers, starting at 1, and end when we have passed 99 (no 3 digits in soccer/ European football).
 
-## Setup:
-Clone current repo.
-Create conda environment and install requirements.
-Code makes use of the several repositories. Run 
+We'll use '1' in the simple passthrough below (Translates to one iteration).
+
+For each frame in the tracklet, calculate v(t,k) which, in english, would be the legibility score of the frame in the tracklet, multiplied by the log of the likelihood that the jersey number in the frame is a 1, plus ε.
+
+v(t,k) = qt x log(Pt(k) + ε)
+
+Next, we'll take the output of v(t,k) and take the top L frames - the frames with the highest confidence values that the jersey number is a 1. Following, use sum to change the array from 2D to 1D and sum the total score by candidate.
+
+Finally, use argmax to get the highest confidence level from the candidate total scores.
+
+So, let's assume that jersey number 1 reported numerous very high confidence ratings. Those confidence ratings over numerous frames would be picked up by Top-L, and summed to get a high score. This makes it likely that 'argmax' will find this candidate appealing as it is a high decimal number (don't forget we're logging here).
+
+However, let's assume that jersey number 22 reported very few high confidence rating. Those high confidence ratings would still be picked up in the Top-L process, but the final sum of them all might return a negative number at the end. This would not make it an ideal selection by argmax.
+
+#### In Summary
+For each jersey number possible, compute frame-by-frame confidence of the tracklet with the most confident values (top-L). If frame-by-frame confidence is low or staggers, this is not our jersey number. However, if the frame-by-frame confidence is relatively high, then this number could likely be the actual one in the tracklet.
+
+#### Main Pipeline Integration
+Originally, at step 8 (combine tracklet results), the pipeline calls the method "helpers.process_jersey_id_predictions(...)" which can be found in the helpers.py file (line 611). The method then goes on to call a sub-method "find_best_prediction(...)."
+
+Our new methods will swap out process_jersey_id_predictions(...) and find_best_predictions(...) with the workflow below:
+
 ```
-python3 setup.py 
+main.py
+  └──> helpers.process_jersey_id_predictsion_top_L(...)
+            └──> predict_jersey_number_top_L(...)
+                     └──> candidate_and_frame_processing(...)
 ```
-
-to automatically clone, setup a separate conda environment for each and fetch models. 
-
-Alternatively,  clone each of the following repo, setup conda environments for each following documentation in corresponding repo, and download models:
-### SAM:
-Should be in jersey-number-pipeline/sam. Repo: [https://github.com/davda54/sam](https://github.com/davda54/sam)
-
-### Centroid-Reid:
-Should be in jersey-number-pipeline/reid/centroids-reid. Repo: [https://github.com/mikwieczorek/centroids-reid](https://github.com/mikwieczorek/centroids-reid).
-Download [centroid-reid model weights](https://drive.google.com/file/d/1bSUNpvMfJkvCFOu-TK-o7iGY1p-9BxmO/view?usp=sharing) and place 
-them under jersey-number-pipeline/reid/centroids-reid/models.
-
-### ViTPose:
-Should be in jersey-number-pipeline/pose/ViTPose. Repo: [https://github.com/ViTAE-Transformer/ViTPose](https://github.com/ViTAE-Transformer/ViTPose).
-Download [ViTPose model weights](https://1drv.ms/u/s!AimBgYV7JjTlgShLMI-kkmvNfF_h?e=dEhGHe) and place 
-them under jersey-number-pipeline/pose/ViTPose/checkpoints/.
-
-### PARSeq:
-We include the version of the PARSeq code that was used to fine-tune the jersey number model as part of this repo. The original PARSeq repo is [https://github.com/baudm/parseq](https://github.com/baudm/parseq). Model weights should be downloaded and placed under jersey-number-pipeline/models/. 
-* [Original model weights](https://drive.google.com/file/d/1AK_GnM6pIYyfIf3tBYSKIyR3Fa3Z46Cx/view?usp=sharing)
-* [Hockey fine-tuned](https://drive.google.com/file/d/1FyM31xvSXFRusN0sZH0EWXoHwDfB9WIE/view?usp=sharing)
-* [SoccerNet fine-tuned](https://drive.google.com/file/d/1uRln22tlhneVt3P6MePmVxBWSLMsL3bm/view?usp=sharing)
-
-
-## Data:
-SoccerNet Jersey Number Recognition:
-[https://github.com/SoccerNet/sn-jersey](https://github.com/SoccerNet/sn-jersey)
-Download and save under /data subfolder. 
-
-* Weakly-labelled player images used to train legibility classifier can be downloaded [here](https://drive.google.com/file/d/1CmJfUmS_ZudgEiCT14b2CbyMA3nEO_uy/view?usp=sharing). 
-* Weakly-labelled jersey number crops used to fine-tune STR in LMDB format can be downloaded [here](https://drive.google.com/file/d/1PX8XDF3nNMZAvcjL6M5hurwX78ePAhSs/view?usp=sharing).
-
-Hockey (comprised of legibility dataset and jersey number dataset): 
-* Request access by contacting [Maria Koshkina](mailto:koshkina@hotmail.com?subject=Hockey). Extract under data/Hockey subfolder.
-
-### Trained Legibility Classifier Weights:
-Download and place under jersey-number-pipeline/models/.
-* [Hockey](https://drive.google.com/file/d/1RfxINtZ_wCNVF8iZsiMYuFOP7KMgqgDp/view?usp=sharing)
-* [SoccerNet](https://drive.google.com/file/d/18HAuZbge3z8TSfRiX_FzsnKgiBs-RRNw/view?usp=sharing)
-
-
-## Configuration:
-Update configuration.py if required to set custom path to data or dependencies.
-
-**For cross-platform usage (Windows/Mac/Linux):** The project now automatically detects your OS and configures paths, Python executables, and GPU acceleration (CUDA/MPS/CPU) accordingly. See [DEVICE_AND_PLATFORM.md](DEVICE_AND_PLATFORM.md) for details on:
-- Moving the project between machines
-- Overriding auto-detected paths via environment variables
-- Platform-specific behavior (DataLoader workers, GPU types, etc.)
-
-**Environment variables (optional):**
-- `JERSEY_PROJECT_ROOT`: Override project root path (default: auto-detected from configuration.py location)
-- `JERSEY_CONDA_BASE`: Override conda environments path (default: ~/miniconda3/envs) 
-
-## Inference:
-To run the full inference pipeline for SoccerNet:
-```
-python3 main.py SoccerNet test
-```
-To run legibility and jersey number inference for hockey:
-```
-python3 main.py Hockey test
-```
-Update actions in main.py actions list to run steps selectively.
-
-## Train (Hockey)
-Train legibility classifier:
-```
-python3 legibility_classifier.py --train --arch resnet34 --sam --data <new-dataset-directory> --trained_model_path ./experiments/hockey_legibility.pth
-```
-
-Fine-tune PARSeq STR for hockey number recognition:
-```
-python3 main.py Hockey train --train_str
-```
-
-Trained model will be under str/parseq/outputs
-
-## Train (SoccerNet)
-To train legibility classifier and jersey number recognition for SoccerNet, we first generate weakly labelled datasets and then use them to fine-tune.
-Weak labels are obtained by using models trained on hockey data.
-
-Train legibility classifier for it:
-```
-python3 legibility_classifier.py --finetune --arch resnet34 --sam --data <new-dataset-directory>  --full_val_dir
-<new-dataset-directory>/val --trained_model_path ./experiments/hockey_legibility.pth --new_trained_model_path ./experiments/sn_legibility.pth
-```
-
-Fine-tune PARSeq on weakly-labelled SoccerNet data:
-```
-python3 main.py SoccerNet train --train_str
-```
-
-Trained model will be under str/parseq/outputs.
-
-## Citation
-```
-@InProceedings{Koshkina_2024_CVPR,
-    author    = {Koshkina, Maria and Elder, James H.},
-    title     = {A General Framework for Jersey Number Recognition in Sports Video},
-    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
-    month     = {June},
-    year      = {2024},
-    pages     = {3235-3244}
-}
-```
-
-## Acknowledgements
-We would like to thank authors of the following repositories: 
-* [PARSeq](https://github.com/baudm/parseq)
-* [Centroid-Reid](https://github.com/mikwieczorek/centroids-reid)
-* [ViTPose](https://github.com/ViTAE-Transformer/ViTPose)
-* [SoccerNet](https://github.com/SoccerNet/sn-jersey)
-* [McGill Hockey Player Tracking Dataset](https://github.com/grant81/hockeyTrackingDataset)
-* [SAM](https://github.com/davda54/sam)
-
-## License
-[![License](https://i.creativecommons.org/l/by-nc/3.0/88x31.png)](http://creativecommons.org/licenses/by-nc/3.0/)
-
-This work is licensed under a [Creative Commons Attribution-NonCommercial 3.0 Unported License](http://creativecommons.org/licenses/by-nc/3.0/).
